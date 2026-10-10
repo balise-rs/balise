@@ -23,6 +23,9 @@ version = "0.0.0"
 [[package]]
 name = "balise-cli"
 version = "0.0.0"
+dependencies = [
+ "balise-core",
+]
 
 [[package]]
 name = "balise-core"

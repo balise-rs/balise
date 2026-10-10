@@ -47,8 +47,8 @@ Applications define their own codes with `#[derive(AppError)]` and their own pre
 
 Rules:
 
-- A code is never reused or renumbered. A retired code keeps its doc page, which points to its replacement.
-- Every code is declared once, in a registry in the source: code, title, message template, fix, doc text. Messages, `balise explain` and the doc pages are all generated from it.
+- A code is never reused or renumbered. A retired code stays in the registry, and its explanation points to its replacement.
+- Every code is declared once, in a registry in the source with one file per area: code, title, message template, fix, explanation. Messages and `balise explain` read it directly; there is no separate doc page.
 - A test fails if a code is raised anywhere without being in the registry.
 - `EXT0001` wraps anything Balise could not classify. It always keeps the original message.
 

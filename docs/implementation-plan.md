@@ -12,8 +12,7 @@ After each step, the description is removed and replaced by a simple "Done !".
 Done !
 
 ### 1.2 Repository, workspace, CI
-Create the Cargo workspace with the planned crates and folders, and a CI running format, Clippy, tests and the feature combinations. Every crate starts empty but compiles.
-- More: [AGENTS.md](../AGENTS.md)
+Done !
 
 ### 1.3 Error code registry
 Build the single registry where every code is declared with its title, message, fix and doc text. Generate `balise explain` output and the doc pages from it, with a test that fails on an unregistered code.
@@ -128,8 +127,8 @@ Implement `balise mcp` as a stdio relay to the dev server, with `project_map`, `
 Expose routes, inputs, outputs, models, schema and enabled modules as JSON, from the project's dev build. MCP and `balise introspect` share it.
 - More: [agent-experience.md](agent-experience.md#versions)
 
-### 5.3 `llms.txt` and error pages
-Generate the API reference and one page per error code at each release. Nothing is written by hand.
+### 5.3 `llms.txt`
+Generate the API reference at each release. Nothing is written by hand.
 - More: [agent-experience.md](agent-experience.md#docs-for-models)
 
 ### 5.4 Hallucination traps

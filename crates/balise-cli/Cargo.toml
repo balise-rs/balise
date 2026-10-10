@@ -10,3 +10,6 @@ publish.workspace = true
 [[bin]]
 name = "balise"
 path = "src/main.rs"
+
+[dependencies]
+balise-core.workspace = true

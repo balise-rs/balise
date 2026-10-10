@@ -25,7 +25,7 @@ docs/               architecture.md and one document per component
 1. **Own what the agent sees, delegate what it doesn't.** No type from a delegated dependency (hyper, Tokio, rustls, drivers) in the facade's public API or in a user-facing error message.
 2. **One way to do things.** Don't add an API variant for a use case that is already covered.
 3. **No generics or lifetimes for users to declare.** If an API requires them, rethink it.
-4. **Every visible error has a stable code** (`DB0042`), a cause, a location, a suggested fix, and its own doc page.
+4. **Every visible error has a stable code** (`DB0042`), a cause, a location, a suggested fix, and an explanation shown by `balise explain`.
 5. **The core never assumes an optional module.** Cross-module integrations compile only when both features are enabled.
 6. **Nothing dev-only in the production binary**: all dev tooling goes behind the `dev` feature.
 7. **Equivalent choices**: if two approaches are equally good, implement the simpler one and record the other in the log of alternatives ([docs/compilation.md](docs/compilation.md)).

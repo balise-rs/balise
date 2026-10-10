@@ -63,7 +63,7 @@ The agent is configured with one command, whatever the setup:
 ### Resources (read)
 
 - **Project map**: routes and their handlers, inputs and outputs, models, database schema, enabled modules, configuration (secrets hidden).
-- **Error pages**: one per code.
+- **Error codes**: the explanation of each code, as `balise explain` shows it.
 - **API reference**: the same content as `llms.txt`.
 
 ### Tools
@@ -92,7 +92,7 @@ Guided recipes, such as "add a CRUD resource" or "fix all audit warnings", which
 
 - **`AGENTS.md`**, generated in every project: conventions, commands, the working loop, the rule to debug through Balise and never inside dependencies, and the project's enabled modules. Short enough to stay in context.
 - **`llms.txt`**: a compact reference of the whole public API, generated from the source for each release.
-- **Error pages**: generated from the error registry ([errors-and-logs.md](errors-and-logs.md#codes)).
+- **Error explanations**: read from the error registry by `balise explain` and MCP ([errors-and-logs.md](errors-and-logs.md#codes)).
 
 Docs are generated, never written by hand, so they cannot drift from the code.
 
