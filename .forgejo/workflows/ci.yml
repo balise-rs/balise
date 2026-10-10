@@ -49,3 +49,30 @@ jobs:
 
       - name: Feature combinations
         run: cargo hack check --feature-powerset --depth 2
+
+  compile-bench:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      # Each run saves its results under its own key; restoring by prefix gives the latest one.
+      - uses: actions/cache@v4
+        with:
+          path: bench-results
+          key: bench-${{ github.sha }}
+          restore-keys: bench-
+
+      - name: Measure compile times
+        run: |
+          cargo build --release -p compile-bench
+          target/release/compile-bench bench/placeholder \
+            --baseline bench-results/last.txt --out bench-results/last.txt

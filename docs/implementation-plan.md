@@ -15,11 +15,10 @@ Done !
 Done !
 
 ### 1.3 Error code registry
-Build the single registry where every code is declared with its title, message, fix and doc text. Generate `balise explain` output and the doc pages from it, with a test that fails on an unregistered code.
-- More: [errors-and-logs.md](errors-and-logs.md#codes)
+Done !
 
-### 1.4 Compile benchmark and reference project
-Write the script that generates the reference project (about 50 routes) and the CI job that measures compile times per commit. It must exist before the public API takes shape.
+### 1.4 Compile benchmark harness
+Build the measuring infrastructure: the scripts that time each scenario (cold build, `cargo check` after an edit…), the CI job, and the storage of results per commit. It is tested on a placeholder project, since Balise's API does not exist yet; the reference project comes with the mock-up.
 - More: [compilation.md](compilation.md#benchmark)
 
 ## 2. Mock-up
@@ -40,15 +39,19 @@ async fn create(shop_id: Path<ShopId>, input: Body<CreateOrder>, db: Db) -> Resu
 }
 ```
 
-### 2.3 Error in the logs and `balise check` output
+### 2.3 Reference project generator
+Turn the mock-up resource into a template, and write the script that generates the reference project from it (about 50 routes, 15 models). It does not compile yet; it is the target the core must make compile, and it changes whenever the mock-up does.
+- More: [compilation.md](compilation.md#benchmark)
+
+### 2.4 Error in the logs and `balise check` output
 Write the exact terminal and JSON output for a runtime error, a performance warning and an enriched compile error. They must be readable by a human and actionable by an agent.
 - More: [errors-and-logs.md](errors-and-logs.md#renderings)
 
-### 2.4 MCP response
+### 2.5 MCP response
 Write what `project_map`, `search_api` and `explain` return for the mock-up project. This fixes the shape of the MCP data before implementation.
 - More: [agent-experience.md](agent-experience.md#mcp)
 
-### 2.5 Review by agents
+### 2.6 Review by agents
 Give the mock-up to independent agents with a task, and to reviewers asked for bad ideas. Adjust the design documents with what they find before writing framework code.
 - More: [agent-experience.md](agent-experience.md#evaluating-the-agent-experience)
 
@@ -64,7 +67,7 @@ Implement the route attributes, compile-time collection and the radix tree built
 - To decide: `linkme` or `inventory` ([alternatives.md](alternatives.md))
 
 ### 3.3 Extractors, validation, Input and Output
-Implement `Path`, `Query`, `Body`, `State`, `RequestId` and the `Input` / `Output` derives with their validation attributes. Validation errors return a `422` with one message per field.
+Implement `Path`, `Query`, `Body`, `State`, `RequestId` and the `Input` / `Output` derives with their validation attributes. Validation errors return a `422` with one message per field. As soon as routes and extractors compile, the reference project (or the part it can already build) joins the compile benchmark, and every later API change is measured.
 - More: [application.md](application.md#parameters)
 - To decide: type erasure after extraction or full monomorphization ([alternatives.md](alternatives.md))
 
@@ -127,8 +130,8 @@ Implement `balise mcp` as a stdio relay to the dev server, with `project_map`, `
 Expose routes, inputs, outputs, models, schema and enabled modules as JSON, from the project's dev build. MCP and `balise introspect` share it.
 - More: [agent-experience.md](agent-experience.md#versions)
 
-### 5.3 `llms.txt`
-Generate the API reference at each release. Nothing is written by hand.
+### 5.3 `llms.txt` and error pages
+Generate the API reference and one page per error code at each release. Nothing is written by hand.
 - More: [agent-experience.md](agent-experience.md#docs-for-models)
 
 ### 5.4 Hallucination traps

@@ -17,6 +17,7 @@ crates/
   balise-auth/      auth (feature `auth`)
   balise-dev/       MCP, instrumentation (feature `dev`, never in prod)
   balise-cli/       the `balise` binary, installed on the host
+bench/              compile-time benchmark
 docs/               architecture.md and one document per component
 ```
 
@@ -28,7 +29,7 @@ docs/               architecture.md and one document per component
 4. **Every visible error has a stable code** (`DB0042`), a cause, a location, a suggested fix, and an explanation shown by `balise explain`.
 5. **The core never assumes an optional module.** Cross-module integrations compile only when both features are enabled.
 6. **Nothing dev-only in the production binary**: all dev tooling goes behind the `dev` feature.
-7. **Equivalent choices**: if two approaches are equally good, implement the simpler one and record the other in the log of alternatives ([docs/compilation.md](docs/compilation.md)).
+7. **Equivalent choices**: if two approaches are equally good, implement the simpler one and record the other in the log of alternatives ([docs/alternatives.md](docs/alternatives.md)).
 
 ## Before submitting a change
 

@@ -54,3 +54,7 @@ version = "0.0.0"
 [[package]]
 name = "balise-ts"
 version = "0.0.0"
+
+[[package]]
+name = "compile-bench"
+version = "0.0.0"
