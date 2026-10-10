@@ -1,0 +1,13 @@
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  hello:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "Hello from $(hostname)"
+          cat /etc/os-release
+          ls -la
