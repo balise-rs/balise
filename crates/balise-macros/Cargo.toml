@@ -1,0 +1,11 @@
+[package]
+name = "balise-macros"
+description = "Procedural macros for Balise: routes and derives"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+proc-macro = true

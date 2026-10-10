@@ -1,0 +1,12 @@
+[package]
+name = "balise-cli"
+description = "The balise command-line tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "balise"
+path = "src/main.rs"

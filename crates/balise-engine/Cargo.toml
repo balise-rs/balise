@@ -1,0 +1,8 @@
+[package]
+name = "balise-engine"
+description = "HTTP engine wrapper for Balise: startup and shutdown"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true

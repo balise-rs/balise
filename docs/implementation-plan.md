@@ -9,8 +9,7 @@ After each step, the description is removed and replaced by a simple "Done !".
 ## 1. Foundations
 
 ### 1.1 Reserve the name
-Publish placeholder `balise` crates on crates.io and create the GitHub organization. Reserve `@balise` on npm for the front-end packages.
-- More: [architecture.md](architecture.md)
+Done !
 
 ### 1.2 Repository, workspace, CI
 Create the Cargo workspace with the planned crates and folders, and a CI running format, Clippy, tests and the feature combinations. Every crate starts empty but compiles.
