@@ -33,11 +33,13 @@ macro_rules! codes {
 }
 
 mod ext;
+mod http;
 
 pub use ext::*;
+pub use http::*;
 
 /// Every area, with its prefix and its codes.
-pub const AREAS: &[(&str, &[&ErrorCode])] = &[("EXT", ext::ALL)];
+pub const AREAS: &[(&str, &[&ErrorCode])] = &[("EXT", ext::ALL), ("HTTP", http::ALL)];
 
 /// A registered error code. Only the registry can create one.
 #[derive(Debug, PartialEq, Eq)]
@@ -73,6 +75,16 @@ impl ErrorCode {
     /// The full explanation, in Markdown, shown by `balise explain`.
     pub fn explanation(&self) -> &'static str {
         self.explanation
+    }
+
+    /// The message with its placeholders filled: `{address}` takes the value of `address`.
+    /// A placeholder without a value is left as is.
+    pub fn format_message(&self, args: &[(&str, &str)]) -> String {
+        let mut message = self.message.to_string();
+        for (name, value) in args {
+            message = message.replace(&format!("{{{name}}}"), value);
+        }
+        message
     }
 
     /// The text printed by `balise explain`.

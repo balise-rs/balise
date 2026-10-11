@@ -61,6 +61,10 @@ Rules:
 6. Apply pending migrations under a lock, or refuse to start, depending on configuration ([data.md](data.md)).
 7. Start listening, then report ready on `/ready`.
 The application is built once. Nothing above runs again per request.
+
+`balise::run()` is synchronous and never returns: it creates Tokio's multi-threaded runtime itself, so application code has no `#[tokio::main]` and no `Result` in `main`. A fatal error at startup (the port is taken: `HTTP0001`) is reported with its code, and the process exits with a non-zero code.
+
+The server speaks HTTP/1.1, what reverse proxies and the Vite proxy use towards the app. HTTP/2 comes with built-in TLS.
  
 ## Configuration
  
@@ -137,6 +141,7 @@ Handlers are monomorphized up to extraction, then type-erased behind one boxed i
 - One error type, `balise::Error`, carries an HTTP status, a stable code, a message, and the original cause.
 - Codes are grouped by area: `HTTP`, `VAL` (validation), `DB`, `AUTH`, `CFG`, `EXT`; applications add their own through `#[derive(AppError)]`.
 - Errors from delegated dependencies that Balise recognizes (hyper, I/O, drivers) are converted to Balise errors with their own codes. Anything unrecognized becomes `EXT0001`, which keeps the original message.
+- Connection errors caused by the client (a closed connection, bytes that are not HTTP) are `debug` events with `HTTP0002`: they are not errors of the server.
 - In dev, error responses include the cause and the suggested fix. In prod, they include only a generic message and the request ID.
 Full error and log format: [errors-and-logs.md](errors-and-logs.md).
  

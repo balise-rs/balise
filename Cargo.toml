@@ -19,3 +19,10 @@ balise-orm = { path = "crates/balise-orm" }
 balise-auth = { path = "crates/balise-auth" }
 balise-mail = { path = "crates/balise-mail" }
 balise-dev = { path = "crates/balise-dev" }
+
+# Delegated: never exposed by the facade.
+bytes = "1.12"
+http-body-util = "0.1.5"
+hyper = { version = "1.11", features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "net", "time"] }
