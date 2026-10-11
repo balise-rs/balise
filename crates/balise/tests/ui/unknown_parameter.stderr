@@ -37,9 +37,10 @@ error[E0277]: CMP0007: `()` cannot be returned from a handler
 6 | async fn create(_input: CreateOrder) {}
   |          ^^^^^^ not a response type
   |
-  = help: the trait `balise::__private::IntoResponse` is not implemented for `()`
+  = help: the trait `balise::__private::Output` is not implemented for `()`
   = note: fix: Return a struct that derives `Output`, or a wrapper: `Created<T>`, `NoContent`, `Page<T>`.
   = note: more: balise explain CMP0007
+  = note: required for `()` to implement `balise::__private::IntoResponse`
 note: required by a bound in `balise::__private::respond`
  --> $WORKSPACE/crates/balise-core/src/handler.rs
   |

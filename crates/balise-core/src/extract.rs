@@ -8,10 +8,11 @@ use std::fmt;
 use std::future::Future;
 
 use crate::error_codes::{
-    ErrorCode, HTTP0011, VAL0001, VAL0002, VAL0003, VAL0004, VAL0005, VAL0006,
+    ErrorCode, HTTP0011, VAL0001, VAL0002, VAL0003, VAL0004, VAL0005, VAL0006, VAL0007,
 };
 use crate::handler::{FromRequest, Request, Response};
-use crate::json::{self, Value};
+use crate::input::{Fields, Input};
+use crate::json;
 
 /// A field that did not pass, with the code of its cause: `quantity`, `VAL0006`,
 /// `must be at most 100`.
@@ -39,6 +40,14 @@ impl FieldError {
         FieldError::new(field, VAL0006, &[("rule", rule)])
     }
 
+    /// A field the `Input` does not declare (`VAL0007`), with the closest declared name.
+    pub fn unknown(field: &str, closest: Option<&str>) -> FieldError {
+        let suggestion = closest
+            .map(|name| format!("; did you mean `{name}`?"))
+            .unwrap_or_default();
+        FieldError::new(field, VAL0007, &[("suggestion", &suggestion)])
+    }
+
     fn new(field: &str, code: &'static ErrorCode, args: &[(&str, &str)]) -> FieldError {
         FieldError {
             field: field.to_string(),
@@ -50,13 +59,6 @@ impl FieldError {
 
 /// Every field that did not pass, so that all of them can be fixed at once.
 pub type FieldErrors = Vec<FieldError>;
-
-/// A struct that derives `Input`: built from a JSON body or a query string, with its rules.
-pub trait Input: Sized {
-    fn from_json(value: Value) -> Result<Self, FieldErrors>;
-    /// Query string values are text: numbers and booleans are read from it.
-    fn from_query(pairs: Vec<(String, String)>) -> Result<Self, FieldErrors>;
-}
 
 /// Path parameters: `Path<OrderId>` for one, `Path<(ShopId, OrderId)>` for several, in order.
 pub struct Path<T>(T);
@@ -166,7 +168,7 @@ impl<T: PathValue + Send> FromRequest for Path<T> {
 
 impl<T: Input + Send> FromRequest for Query<T> {
     fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Response>> + Send {
-        let value = T::from_query(query_pairs(&request.query))
+        let value = T::from_fields(Fields::from_query(query_pairs(&request.query)))
             .map(Query)
             .map_err(|fields| validation_failed(&fields, &request.request_id));
         async move { value }
@@ -193,7 +195,12 @@ fn read_body<T: Input>(request: &Request) -> Result<T, Response> {
         let message = VAL0002.format_message(&[("cause", &cause)]);
         Response::error(400, VAL0002, &message, &[], id)
     })?;
-    T::from_json(value).map_err(|fields| validation_failed(&fields, id))
+    let fields = Fields::from_json(value).map_err(|kind| {
+        let cause = format!("expected an object, found {kind}");
+        let message = VAL0002.format_message(&[("cause", &cause)]);
+        Response::error(400, VAL0002, &message, &[], id)
+    })?;
+    T::from_fields(fields).map_err(|fields| validation_failed(&fields, id))
 }
 
 fn validation_failed(fields: &FieldErrors, request_id: &str) -> Response {

@@ -1,11 +1,8 @@
 //! Routes declared with attributes are collected, matched and called with their extractors.
-//!
-//! Responses come later; this test implements `IntoResponse` for its own type. `Input` is
-//! implemented by hand until its derive exists.
 
 use std::sync::Arc;
 
-use balise::__private::{FieldError, FieldErrors, Input, IntoResponse, Response, Value, routes};
+use balise::__private::routes;
 use balise::prelude::*;
 use balise_core::config::Config;
 use balise_core::router::Router;
@@ -13,71 +10,47 @@ use balise_engine::Server;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-struct Text(String);
-
-impl IntoResponse for Text {
-    fn into_response(self) -> Response {
-        Response::json(200, format!("{:?}", self.0))
-    }
+#[derive(Output)]
+struct Text {
+    text: String,
 }
 
 /// `{"note": "…"}`, or `?note=…`.
+#[derive(Input)]
 struct Note {
     note: String,
-}
-
-impl Input for Note {
-    fn from_json(value: Value) -> Result<Self, FieldErrors> {
-        let Value::Object(fields) = value else {
-            return Err(vec![FieldError::wrong_type(
-                "",
-                "an object",
-                "another value",
-            )]);
-        };
-        match fields.into_iter().find(|(k, _)| k == "note") {
-            Some((_, Value::String(note))) => Ok(Note { note }),
-            Some(_) => Err(vec![FieldError::wrong_type(
-                "note",
-                "text",
-                "another value",
-            )]),
-            None => Err(vec![FieldError::missing("note")]),
-        }
-    }
-
-    fn from_query(pairs: Vec<(String, String)>) -> Result<Self, FieldErrors> {
-        match pairs.into_iter().find(|(k, _)| k == "note") {
-            Some((_, note)) => Ok(Note { note }),
-            None => Err(vec![FieldError::missing("note")]),
-        }
-    }
 }
 
 #[get("/orders/{id}")]
 async fn get(id: Path<u32>) -> Text {
     // `id` is the value itself: a `u32`, not a `Path<u32>`.
-    Text(format!("order {}", id + 1))
+    Text {
+        text: format!("order {}", id + 1),
+    }
 }
 
 #[get("/shops/{shop_id}/orders/{id}")]
 async fn get_in_shop((shop_id, id): Path<(String, u32)>) -> Text {
-    Text(format!("order {id} in {shop_id}"))
+    Text {
+        text: format!("order {id} in {shop_id}"),
+    }
 }
 
 #[get("/orders")]
 async fn list(filters: Query<Note>, request_id: RequestId) -> Text {
-    Text(format!(
-        "{} {}",
-        filters.note,
-        request_id.as_str().starts_with("req_")
-    ))
+    Text {
+        text: format!(
+            "{} {}",
+            filters.note,
+            request_id.as_str().starts_with("req_")
+        ),
+    }
 }
 
 #[post("/orders")]
 async fn create(input: Body<Note>) -> Text {
     let note: String = input.note; // moved out: no `into_inner()`, no `.clone()`
-    Text(note)
+    Text { text: note }
 }
 
 async fn request(address: std::net::SocketAddr, raw_head: &str, body: &str) -> String {
@@ -124,10 +97,13 @@ async fn path_values_arrive_unwrapped_and_typed() {
     let address = start().await;
 
     let response = request(address, "GET /api/orders/41 HTTP/1.1", "").await;
-    assert!(response.ends_with(r#""order 42""#), "{response}");
+    assert!(response.ends_with(r#"{"text":"order 42"}"#), "{response}");
 
     let response = request(address, "GET /api/shops/sho_1/orders/7 HTTP/1.1", "").await;
-    assert!(response.ends_with(r#""order 7 in sho_1""#), "{response}");
+    assert!(
+        response.ends_with(r#"{"text":"order 7 in sho_1"}"#),
+        "{response}"
+    );
 
     let response = request(address, "GET /api/orders/abc HTTP/1.1", "").await;
     assert!(response.starts_with("HTTP/1.1 404"), "{response}");
@@ -139,7 +115,7 @@ async fn query_and_body_are_read_into_inputs() {
     let address = start().await;
 
     let response = request(address, "GET /api/orders?note=a+b HTTP/1.1", "").await;
-    assert!(response.ends_with(r#""a b true""#), "{response}");
+    assert!(response.ends_with(r#"{"text":"a b true"}"#), "{response}");
 
     let response = request(address, "GET /api/orders HTTP/1.1", "").await;
     assert!(response.starts_with("HTTP/1.1 422"), "{response}");
@@ -152,11 +128,11 @@ async fn query_and_body_are_read_into_inputs() {
 
     let json = "POST /api/orders HTTP/1.1\r\nContent-Type: application/json";
     let response = request(address, json, r#"{"note": "hello"}"#).await;
-    assert!(response.ends_with(r#""hello""#), "{response}");
+    assert!(response.ends_with(r#"{"text":"hello"}"#), "{response}");
 
     let response = request(address, json, r#"{"note": 3}"#).await;
     assert!(
-        response.contains(r#"{"code":"VAL0005","message":"must be text, not another value"}"#),
+        response.contains(r#"{"code":"VAL0005","message":"must be text, not `3`"}"#),
         "{response}"
     );
 

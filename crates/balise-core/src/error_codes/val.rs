@@ -12,19 +12,22 @@ that did not pass, each with its own code, so that all of them can be fixed at o
 
 - `VAL0004`: a required field is missing;
 - `VAL0005`: a value has the wrong type;
-- `VAL0006`: a value breaks a rule (`min`, `max`, `length`, `email`…).
+- `VAL0006`: a value breaks a rule (`min`, `max`, `length`, `email`…);
+- `VAL0007`: a field is not declared by the `Input`.
 
 The same rules run in the browser, generated from the same `Input`, so a form usually shows
 these messages before sending anything.
 "#,
     }
     VAL0002 {
-        title: "Invalid JSON",
-        message: "The request body is not valid JSON: {cause}",
-        fix: "Send a JSON body, such as `{\"quantity\": 2}`, with `Content-Type: application/json`.",
+        title: "Invalid JSON body",
+        message: "The request body is not a JSON object: {cause}",
+        fix: "Send a JSON object, such as `{\"quantity\": 2}`, with `Content-Type: application/json`.",
         explanation: r#"
-The route reads a JSON body (`Body<T>`), and the bytes received are not valid JSON. The
-cause gives the line and column where reading stopped. The answer is `400`.
+The route reads a JSON body (`Body<T>`), which must be one JSON object whose keys are the
+fields of the `Input`. Either the bytes received are not valid JSON, and the cause gives the
+line and column where reading stopped, or they are valid JSON of another kind (a list, a
+string…). The answer is `400`.
 "#,
     }
     VAL0003 {
@@ -65,6 +68,20 @@ every value is text, and numbers and booleans are read from it. It appears in `f
 A field has the right type, but breaks a rule declared on the `Input`: `min`, `max`,
 `length`, `email`, `url` or `one_of`. The message states the rule and its bound
 (`must be at most 100`). It appears in `fields` of a `VAL0001` error.
+"#,
+    }
+    VAL0007 {
+        title: "Unknown field",
+        message: "is not a field of this input{suggestion}",
+        fix: "Remove the field, or fix its name: the message suggests the closest declared one. If the input comes from a third party that adds fields, mark it `#[input(allow_unknown_fields)]`.",
+        explanation: r#"
+The body or the query string has a field that the `Input` does not declare. It is rejected
+rather than ignored, so that a typo (`quantiy`) never passes silently while the real field
+takes its default. The message suggests the closest declared name when there is one. It
+appears in `fields` of a `VAL0001` error.
+
+An `Input` that describes a payload sent by someone else, such as a webhook, accepts
+unknown fields with `#[input(allow_unknown_fields)]`: they are ignored.
 "#,
     }
 }

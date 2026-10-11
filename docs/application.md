@@ -99,8 +99,8 @@ Inputs and outputs live in the resource's `api.rs`. It is the contract with the 
 
 Inputs are structs that derive `Input`. One rule for every field:
  
-- `T`: required.
-- `Option<T>`: optional.
+- `T`: required; absent or `null` is an error.
+- `Option<T>`: optional; absent or `null` gives `None`.
 - `#[input(default = ...)]`: optional, with a default value.
 - `Patch<T>`: in an update input, absent leaves the field unchanged, a value sets it, `null` clears it. Apply it with `order.update(db, |o| input.apply_to(o))`.
 
@@ -124,7 +124,7 @@ Validation attributes:
 | Attribute | Applies to |
 | --- | --- |
 | `min = n`, `max = n` | numbers |
-| `length(min = n, max = n)` | strings, lists |
+| `length(min = n, max = n)` | strings (characters), lists (items); either bound alone |
 | `email`, `url` | strings |
 | `one_of("a", "b")` | strings |
 | `default = value` | any field |
@@ -133,7 +133,11 @@ If validation fails, Balise answers `422` (`VAL0001`) with a code and a message 
 
 A field the `Input` does not declare is rejected, with the closest declared name when there is one (`quantiy`: did you mean `quantity`?): a typo never passes silently. An `Input` that describes a payload sent by a third party, such as a webhook, accepts unknown fields with `#[input(allow_unknown_fields)]`.
  
-The same `Input` struct works for `Body` and `Query`. Name inputs after the action: `CreateOrder`, `UpdateOrder`, `OrderFilters`.
+Fields hold text (`String`), numbers, `bool` and lists of them (`Vec<T>`); identifiers, enums and dates join with the models. On an `Option<T>` or `Patch<T>` field, rules apply to the value when there is one. A rule on a type it does not apply to is a compile error (`CMP0009`), and so is a field type Balise cannot read (`CMP0010`) or an unknown attribute (`CMP0008`).
+
+Each field gets at most one error: its type first, then its rules in the order written. All fields are read before answering, so one `422` lists everything to fix.
+
+The same `Input` struct works for `Body` and `Query`. In a query string every value is text: numbers and booleans are read from it, and a list is written `?tags=a,b`. Name inputs after the action: `CreateOrder`, `UpdateOrder`, `OrderFilters`.
  
 ### Responses
  
@@ -161,7 +165,7 @@ struct OrderView {
  
 Name outputs after the resource: `OrderView`, `OrderSummary`. TypeScript types are generated from every `Input` and `Output` ([web.md](web.md)).
  
-The response body is the `Output` as plain JSON. You never set a status code by number: the return type decides it. Errors always use the same JSON body, described in [engine.md](engine.md#response-format).
+The response body is the `Output` as plain JSON: fields in declaration order, under their Rust names, `None` written `null`. Fields hold text, numbers, `bool`, `Option<T>`, `Vec<T>` and other `Output` structs. You never set a status code by number: the return type decides it. Errors always use the same JSON body, described in [engine.md](engine.md#response-format).
  
 Success or failure is never written by hand in the body. The HTTP status carries it, and the generated TypeScript client turns every call into `{ ok: true, data }` or `{ ok: false, error }` for the front end.
  

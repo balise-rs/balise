@@ -1,0 +1,7 @@
+error: CMP0008: Invalid `Input` declaration: it derives on a struct only
+         fix: Derive on a struct with named fields and no generics, and use only the attributes listed by `balise explain CMP0008`.
+         more: balise explain CMP0008
+ --> tests/ui/input_on_enum.rs:4:6
+  |
+4 | enum Status {
+  |      ^^^^^^

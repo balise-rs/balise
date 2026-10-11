@@ -96,7 +96,7 @@ The router is Balise's own, entirely: its answers (`404`, `405`, `balise why`) a
 2. Balise assigns a request ID and starts a log span.
 3. The router finds the handler, or answers `404` / `405`.
 4. Middleware runs: the route's timeout and body size limit, CORS, compression, authentication when enabled.
-5. Extraction builds each parameter: path, query, body, then services (`Db`, `State`, `CurrentUser`). A path value of the wrong type answers `404` (`HTTP0011`), a body that is not JSON `400` (`VAL0002`), another content type `415` (`VAL0003`), a body over the limit `413` (`HTTP0012`, read no further than the limit), and validation errors `422` (`VAL0001`) with a code and a message per field, without calling the handler. Every request gets an identifier (`req_7f3a2c`), in every error body and in logs.
+5. Extraction builds each parameter: path, query, body, then services (`Db`, `State`, `CurrentUser`). A path value of the wrong type answers `404` (`HTTP0011`), a body that is not a JSON object `400` (`VAL0002`), another content type `415` (`VAL0003`), a body over the limit `413` (`HTTP0012`, read no further than the limit), and validation errors `422` (`VAL0001`) with a code and a message per field, without calling the handler. Every request gets an identifier (`req_7f3a2c`), in every error body and in logs.
 6. The handler runs.
 7. The result is converted into a response. Errors become responses with their code (see below).
 8. The request is logged once, with its duration, status, query count, and request ID.

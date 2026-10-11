@@ -73,4 +73,43 @@ A handler's return type decides the response: an `Output` is a `200` with JSON, 
 a `201`, `NoContent` a `204`. A model is never returned: convert it to its view with `.into()`.
 "#,
     }
+    CMP0008 {
+        title: "Invalid Input or Output declaration",
+        message: "Invalid `{derive}` declaration: {reason}",
+        fix: "Derive on a struct with named fields and no generics, and use only the attributes listed by `balise explain CMP0008`.",
+        explanation: r#"
+`Input` and `Output` derive on structs with named fields and no generics. Their attributes
+are the ones listed in the documentation, and nothing else:
+
+- on an `Input`: `#[input(model = Order)]` and `#[input(allow_unknown_fields)]`;
+- on an `Input` field: `min`, `max`, `length(min = …, max = …)`, `email`, `url`,
+  `one_of("a", "b")` and `default = …`;
+- on an `Output`: `#[output(from = Order)]`.
+
+The message names what is wrong and the fix gives the right form.
+"#,
+    }
+    CMP0009 {
+        title: "Validation rule on the wrong type",
+        message: "`{rule}` does not apply to `{type}`",
+        fix: "Use `min` and `max` on numbers, `length` on text and lists, and `email`, `url` and `one_of` on text.",
+        explanation: r#"
+Each validation rule of an `Input` applies to some types only: `min` and `max` to numbers,
+`length` to `String` and `Vec` (characters or items), `email`, `url` and `one_of` to
+`String`. On an `Option<T>` or `Patch<T>` field, the rule applies to `T` when there is a
+value. For a fixed set of values, an enum is usually clearer than `one_of`.
+"#,
+    }
+    CMP0010 {
+        title: "Field type not supported",
+        message: "`{type}` cannot be a field of an `{derive}`",
+        fix: "Use text, numbers, booleans and lists of them; `Option<T>` and `Patch<T>` in an `Input`; another `Output` in an `Output`.",
+        explanation: r#"
+Every field of an `Input` is read from JSON or a query string, and every field of an
+`Output` is written as JSON, so Balise must know how. It knows `String`, `bool`, integers,
+`f64` and `Vec` of them; in an `Input`, `Option<T>` for an optional field and `Patch<T>` for
+a partial update; in an `Output`, `Option<T>` (written `null`) and other structs that derive
+`Output`. Identifiers, enums and dates join the list with the models.
+"#,
+    }
 }

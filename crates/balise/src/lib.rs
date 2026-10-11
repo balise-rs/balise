@@ -3,11 +3,13 @@
 /// Everything a resource needs: `use balise::prelude::*;`.
 pub mod prelude {
     pub use balise_core::extract::{Body, Path, Query, RequestId};
-    pub use balise_macros::{delete, get, patch, post, put};
+    pub use balise_core::input::Patch;
+    pub use balise_macros::{Input, Output, delete, get, patch, post, put};
 }
 
 pub use balise_core::extract::{Body, Path, Query, RequestId};
-pub use balise_macros::{delete, get, patch, post, put};
+pub use balise_core::input::Patch;
+pub use balise_macros::{Input, Output, delete, get, patch, post, put};
 
 /// Starts the app: the server listens and serves until the process stops.
 ///
@@ -35,10 +37,12 @@ pub fn run() -> ! {
 #[doc(hidden)]
 pub mod __private {
     pub use balise_core::__register_route;
-    pub use balise_core::extract::{FieldError, FieldErrors, FromParam, Input};
+    pub use balise_core::extract::{FieldError, FieldErrors, FromParam};
     pub use balise_core::handler::{
         FromRequest, IntoResponse, Method, Request, Response, ResponseFuture, extract, respond,
     };
+    pub use balise_core::input::{Fields, Input, InputField, InputValue, rules};
     pub use balise_core::json::{Number, Value};
+    pub use balise_core::output::{Output, OutputValue, write_field};
     pub use balise_core::registry::{Route, routes};
 }

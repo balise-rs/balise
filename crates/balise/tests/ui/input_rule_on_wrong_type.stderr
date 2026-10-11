@@ -1,0 +1,22 @@
+error[E0277]: CMP0009: `email`, `url` and `one_of` do not apply to `u32`
+ --> tests/ui/input_rule_on_wrong_type.rs:5:13
+  |
+3 | #[derive(Input)]
+  |          ----- required by a bound introduced by this call
+4 | struct CreateOrder {
+5 |     #[input(email)]
+  |             ^^^^^ not text
+  |
+  = help: the trait `balise::__private::rules::Text` is not implemented for `u32`
+  = note: fix: Use these rules on `String` fields; for a fixed set of values, an enum is clearer.
+  = note: more: balise explain CMP0009
+help: the trait `balise::__private::rules::Text` is implemented for `String`
+ --> $WORKSPACE/crates/balise-core/src/input.rs
+  |
+  |     impl Text for String {
+  |     ^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `balise::__private::rules::email`
+ --> $WORKSPACE/crates/balise-core/src/input.rs
+  |
+  |     pub fn email<T: Text>(value: &T) -> Result<(), String> {
+  |                     ^^^^ required by this bound in `email`

@@ -51,7 +51,8 @@ Done !
 ### 3.3 Extractors, validation, Input and Output
 Implement `Path`, `Query`, `Body`, `RequestId` and the `Input` / `Output` derives with their validation attributes. Validation errors return a `422` with one message per field. As soon as routes and extractors compile, the reference project (or the part it can already build) joins the compile benchmark, and every later API change is measured.
 - More: [application.md](application.md#parameters)
-- Done: extractors and their unwrapping, one code per field cause. Next: `Input` / `Output` derives and validation (unknown fields `VAL0007`, `#[input(allow_unknown_fields)]`), then the benchmark's "web" variant.
+- Done: extractors and their unwrapping, one code per field cause, `Input` / `Output` derives with validation and `Patch<T>`. Next: the benchmark's "web" variant.
+- Later, with the ORM: `#[input(model = …)]` applies the model's rules and `Patch` gets `apply_to`; until then the attribute only checks that the model exists. Identifiers, enums and dates become field types with their models.
 
 ### 3.4 Response and error format
 Map return types to statuses (`Created`, `NoContent`, `Page`…) and errors to the single error body. Implement `#[derive(AppError)]`. The response files of `mockup/outputs/` are checked end to end on the mock-up's routes.
