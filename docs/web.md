@@ -93,7 +93,7 @@ npm packages can run code when they are installed, and compromised releases spre
 - **pnpm, pinned.** Projects use pnpm, at a version pinned in the dev image.
 - **Minimum release age of 7 days.** A package version is installable only a week after publication. Most malicious releases are detected and removed within that time.
 - **No install scripts by default.** Dependency lifecycle scripts do not run. A package that really needs one goes on an explicit allowlist.
-- **Human approval for trust changes.** `balise check` flags as needing approval: a new direct dependency, an allowlist addition, a lower release age. An agent cannot loosen the policy on its own.
+- **Trust changes are [sensitive decisions](agent-experience.md#sensitive-decisions).** A new direct dependency, an allowlist addition or a lower release age is a `dependency` decision: who takes it follows the project's policy, and every one is recorded.
 - **`balise add <package>`** is the way to add a dependency. It checks release age, install scripts, known advisories, and names close to a popular package (typosquatting), then explains its findings.
 - **Installs run inside the dev container.** Host credentials (npm tokens, SSH keys, cloud credentials) are not mounted in it, so a malicious package has nothing to steal from the host.
 - **Frozen lockfile.** CI and production builds install exactly what `pnpm-lock.yaml` records.
@@ -159,7 +159,7 @@ Provided by the `mail` module: a small sending interface with two implementation
 - **In dev, mails are captured**, never sent. The page `/_balise/mails` and the `mails` MCP tool show them, so the agent can read the last mail and follow a reset link: it tests the whole flow on its own.
 - **In tests, mails are captured too**: `app.mails()` checks that a mail was sent and gives its links.
 - **In production, SMTP** through a delegated crate. Other providers come later.
-- `Mailer` is a handler parameter, like `Db`. In an open transaction, `mailer.send()` is deferred until the commit ([data.md](data.md#side-effects-after-commit)): no reset mail for a write that was rolled back.
+- `Mailer` is a handler parameter, like `Db`. With the `orm` module, `mailer.send()` writes the mail to an outbox table in the request's transaction, and a worker sends it: no mail for a rolled-back write, and no mail lost on a crash. Without `orm`, the mail is sent from memory after the request ([data.md](data.md#side-effects-after-commit)).
 
 ## Open questions
  
@@ -167,3 +167,15 @@ Provided by the `mail` module: a small sending interface with two implementation
 - Token-based authentication for mobile or third-party clients, alongside cookies.
 - Whether to generate an OpenAPI description in addition to the TypeScript client.
 - Server-side rendering: out of scope for now.
+
+From the review of the mock-up by agents (2026-10-11):
+
+- **Path parameters in hooks**: all three agents wrote `useForm(orders.create, { params: { shopId } })` without any doc. The same guess from three models is a good sign: adopt it, for `useQuery` and `useMutation` too.
+- **Hook names diverge from TanStack Query and from each other**: `cancel.run()` and `isRunning` where agents expect `mutate()` and `isPending`. Pick names agents already know, and the same ones across hooks.
+- **snake_case to camelCase conversion at runtime** corrupts user data stored as JSON (`Json<T>` fields with keys in snake_case). The conversion must be generated per field, from the types, never applied to whole objects.
+- **Realtime**: publishing on a channel is identified by a string, and authorization is checked once at subscription. Both must be typed and re-checked when permissions change.
+- **Auth security**, to settle in the auth step:
+  - Argon2 hashing runs on the async worker threads: it must go through `balise::blocking`;
+  - sign-up answers `409` "email already exists", which reveals accounts: answer the same way and send an email instead;
+  - session rotation at sign-in, revoking sessions after a password reset, and CSRF on the sign-in form itself are unspecified.
+

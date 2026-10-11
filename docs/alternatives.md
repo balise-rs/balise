@@ -54,13 +54,16 @@ Option A is the one implemented first.
 | 2026-10-11 | Ownership enforcement | Compile-time `.owned_by()` in the ORM | Also PostgreSQL row-level security policies generated from `owned_by`, as defense in depth | Runtime (query cost), agents (bypasses caught) | to test |
 | 2026-10-11 | Converting a page | Synchronous `.map(f)` only | `.try_map(f)` for fallible conversions | Agents (cases where a conversion can fail) | to test when a real case appears |
 | 2026-10-11 | Bounded queries on a page's ids | `.unbounded(reason)` when filtering on `page.ids()` | An `is_in` on a page's ids counts as bounded | Agents (`.unbounded()` noise), compile (cost of tracking the bound) | to test |
+| 2026-10-11 | Optional fields at creation | Generated `.with_<field>()` returning `Insert<Order>` | Default field values in Rust structs (`NewOrder { user, .. }`), once stable | Check when the language feature is stabilized, then agents | to test |
+| 2026-10-11 | Concurrent edits by people | Row locks (`.for_update()`) only | Optimistic locking with `#[model(versioned)]` for models edited by several people at once | Agents, runtime (conflicts in long edits) | to test |
+| 2026-10-11 | Thresholds for agent decisions | A policy per type: `human` or `agent` | Thresholds within a type (`agent_up_to = "2x"` for budgets, a minimum age for dependencies) | Agents (decisions taken), human review load | to test |
 | 2026-10-10 | Test isolation | Fresh database per test, copied from a template | Transaction rolled back after each test | Runtime (test suite duration) | to test |
 
 ### Agent experience
 
 | Recorded | Topic | Option A | Option B | Measured by | Status |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-10 | Hallucination traps | Hidden methods failing at compile time | Suggestions from `balise check` only | Agents | to test |
+| 2026-10-10 | Hallucination traps | Hidden methods failing at compile time | Suggestions from `balise check` only | Agents | settled 2026-10-11 by review: A does not compile on stable; B, plus `on_unimplemented` for trait-bound cases ([decisions.md](decisions.md)) |
 | 2026-10-10 | Hook timing | `balise check` after each edit | Once at the end of a task | Agents (iterations, total time) | to test |
 | 2026-10-10 | Hook integration | `--hook` mode in the CLI, speaking each agent's hook protocol | Script in the project (`.claude/hooks/`) calling plain `balise check` | Agents (errors reaching the agent, false runs), on a real generated project | to test |
 | 2026-10-11 | Example resource in a new project | `orders` owned by the signed-in user, one model | (B) `orders` referencing a `Product` model, with a relation; (C) the relation shown in the docs only, not in the project | Agents: blind task "add a `Shop` that owns orders" on each variant, compare errors, invented names and conventions followed | to test |

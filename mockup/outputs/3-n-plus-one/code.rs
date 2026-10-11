@@ -1,5 +1,5 @@
-// src/orders/mod.rs, lines 50 to 64: a dashboard of the 20 latest orders with each customer's email.
-// Not in the mock-up: written the way an agent would, with the N+1 on line 60.
+// src/orders/mod.rs, lines 62 to 76: a dashboard of the 20 latest orders with each customer's email.
+// Not in the mock-up: written the way an agent would, with the N+1 on line 72.
 
 #[get("/admin/orders/latest")]
 async fn latest(admin: Admin, db: Db) -> Result<Vec<AdminOrderView>> {
@@ -11,7 +11,7 @@ async fn latest(admin: Admin, db: Db) -> Result<Vec<AdminOrderView>> {
         .await?;
     let mut views = Vec::new();
     for order in orders {
-        let customer = User::get(db, order.user_id).await?;
+        let customer = User::get(db, order.user.id()).await?;
         views.push(AdminOrderView::new(order, customer));
     }
     Ok(views)

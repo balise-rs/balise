@@ -8,7 +8,7 @@ mod tests;
 use balise::prelude::*;
 
 use api::{CreateOrder, OrderError, OrderFilters, OrderView, UpdateOrder};
-pub use model::{Order, OrderId, OrderStatus};
+pub use model::{NewOrder, Order, OrderId, OrderStatus};
 
 #[get("/orders")]
 async fn list(filters: Query<OrderFilters>, page: Query<PageParams>, user: CurrentUser, db: Db) -> Result<Page<OrderView>> {
@@ -28,25 +28,30 @@ async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> 
 
 #[post("/orders")]
 async fn create(input: Body<CreateOrder>, user: CurrentUser, db: Db) -> Result<Created<OrderView>> {
-    let order = Order::create(db, input).owned_by(&user).await?;
+    let order = Order::create(db, NewOrder {
+        user: user.owner(),
+        quantity: input.quantity,
+        note: input.note.clone(),
+    })
+    .await?;
     Ok(Created(order.into()))
 }
 
 #[patch("/orders/{id}")]
 async fn update(id: Path<OrderId>, input: Body<UpdateOrder>, user: CurrentUser, db: Db) -> Result<OrderView> {
-    let order = Order::get(db, *id).owned_by(&user).await?;
-    Ok(order.update(db, input).await?.into())
+    let order = Order::get(db, *id).owned_by(&user).for_update().await?;
+    Ok(order.update(db, |o| input.apply_to(o)).await?.into())
 }
 
 #[delete("/orders/{id}")]
 async fn delete(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<NoContent> {
-    Order::get(db, *id).owned_by(&user).await?.delete(db).await?;
+    Order::get(db, *id).owned_by(&user).for_update().await?.delete(db).await?;
     Ok(NoContent)
 }
 
 #[post("/orders/{id}/cancel")]
 async fn cancel(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> {
-    let order = Order::get(db, *id).owned_by(&user).await?;
+    let order = Order::get(db, *id).owned_by(&user).for_update().await?;
     if !order.is_pending() {
         return Err(OrderError::NotPending.into());
     }

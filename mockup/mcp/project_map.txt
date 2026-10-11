@@ -15,7 +15,7 @@ Routes (12)
           POST   /orders/{id}/cancel            cancel                  → OrderView                    signed in
 
 Models (2)
-  Order  owned by User, ~1M rows  id, user_id → User, quantity, note?, status: OrderStatus, created_at, updated_at
+  Order  owned by User, ~1M rows  id, user → User, quantity, note?, status: OrderStatus, created_at, updated_at
   User                            id, email (unique), password_hash, created_at, updated_at
 
 Enums: OrderStatus = pending | cancelled

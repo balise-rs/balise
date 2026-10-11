@@ -2,4 +2,4 @@
 
 mod model;
 
-pub use model::{User, UserId};
+pub use model::{NewUser, User, UserId};

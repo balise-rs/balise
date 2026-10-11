@@ -61,8 +61,8 @@ use balise::prelude::*;
  
 // src/orders/mod.rs
 #[get("/orders/{id}")]
-async fn get(id: Path<OrderId>, db: Db) -> Result<OrderView> {
-    let order = Order::get(db, *id).await?;     // missing row: 404
+async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> {
+    let order = Order::get(db, *id).owned_by(&user).await?;     // missing row, or someone else's: 404
     Ok(OrderView::from(order))
 }
 ```
@@ -97,9 +97,13 @@ Inputs are structs that derive `Input`. One rule for every field:
 - `T`: required.
 - `Option<T>`: optional.
 - `#[input(default = ...)]`: optional, with a default value.
+- `Patch<T>`: in an update input, absent leaves the field unchanged, a value sets it, `null` clears it. Apply it with `order.update(db, |o| input.apply_to(o))`.
+
+An `Input` never goes to the database as a whole: the handler copies the fields it accepts into the model's `NewOrder` ([data.md](data.md#naming)).
 ```rust
 // src/orders/api.rs
 #[derive(Input)]
+#[input(model = Order)]     // the model's rules apply to fields of the same name
 struct CreateOrder {
     product_id: ProductId,               // required
     #[input(default = 1, min = 1, max = 100)]
@@ -131,6 +135,7 @@ Return a struct that derives `Output`, or one of the wrappers below.
 ```rust
 // src/orders/api.rs
 #[derive(Output)]
+#[output(from = Order)]     // `order.into()` copies the fields of the same name
 struct OrderView {
     id: OrderId,
     total_cents: i64,
@@ -207,6 +212,26 @@ enum OrderError {
  
 They appear in logs and responses in the same format as Balise's own errors.
  
+## Ownership
+
+A model that belongs to a user declares it, and every query on it says whose rows it reads. Forgetting is a compile error, not a data leak.
+
+```rust
+// src/orders/model.rs
+#[derive(Model)]
+#[model(owned_by = User)]
+pub struct Order { pub id: OrderId, pub user: BelongsTo<User>, … }
+
+// src/orders/mod.rs
+let orders = Order::query().owned_by(&user).page(db, page).await?;   // only this user's orders
+let order = Order::create(db, NewOrder { user: user.owner(), … }).await?;   // the owner comes from `user`, never from an input
+```
+
+- `user` is the handler's `CurrentUser` parameter.
+- Someone else's row answers `404`, as if it did not exist.
+- Screens that need every row (admin, jobs) use `.all_owners("reason")`, a [sensitive decision](agent-experience.md#sensitive-decisions).
+- Details, and models owned through another model: [data.md](data.md#ownership).
+
 ## Shared state
  
 The application runs as one long-lived process. Values live for one of two durations:
@@ -231,7 +256,9 @@ async fn list(cache: State<PriceCache>) -> Result<Vec<PriceView>> { ... }
 ## Heavy work and background tasks
  
 - CPU-heavy work (image processing, large computations) goes in `balise::blocking(|| ...)`, which keeps the server responsive.
-- Work that continues after the response goes in `balise::spawn(async { ... })`, which logs failures in Balise's format.
+- Work that continues after the response goes in `balise::spawn(|db| async move { ... })`, which logs failures in Balise's format. The task gets its own `db`: never use the request's.
+- Work that must happen only if the request's writes are saved goes in `db.after_commit(async move { ... })`.
+- To change a row you read, lock it: `Order::get(db, *id).owned_by(&user).for_update()`. Without the lock, `update` and `delete` do not compile ([data.md](data.md#locking-rows)).
 - Do not call `tokio::spawn` or `std::thread::spawn` directly.
 ## Tests
  
@@ -243,7 +270,6 @@ async fn create_order_returns_201(app: TestApp) {
     app.sign_in_as_new_user().await;
     let res = app.post("/orders").body(CreateOrder::fake()).send().await;
     res.assert_status(201);
-    res.assert_queries_at_most(3);
 }
 ```
  
@@ -253,7 +279,8 @@ async fn create_order_returns_201(app: TestApp) {
 - Check a response with its type first: `let order: OrderView = res.json(); assert_eq!(order.quantity, 2);`. A renamed field then breaks at compile time. For a partial check, `res.assert_json_includes(json!({ "quantity": 2 }))` ignores absent keys and compares the others.
 - `sign_in_as_new_user` exists when the `auth` module is enabled.
 - Mails are captured: `app.mails()` checks that a mail was sent and gives its links, as `/_balise/mails` does in dev.
-- `assert_queries_at_most` enforces a query budget for the route.
+- Every request checks its route's query budget ([budgets](agent-experience.md#budgets)): no assertion to write.
+- `cargo test` works as is; `balise test` also starts the test database.
 ## Working loop
  
 1. Before writing code, look up the project with the MCP tools (`project_map`, `search_api`), or `balise introspect`.
@@ -271,3 +298,10 @@ Investigate through Balise, never in the framework's dependencies. Everything be
 | A request misbehaves | `balise trace <request_id>`: routing decision, extracted parameters, queries, error |
 | A network or connection error | its `HTTP` or `EXT` code, then `balise explain <CODE>` |
 | A panic | the Balise crash report: it shows your code first and folds framework frames |
+
+## Open questions
+
+From the review of the mock-up by agents (2026-10-11):
+
+- **Rust ownership leaks through extractors.** The mock-up uses five different forms: `*id`, a parameter passed as is, `&input.email`, `input.into_inner()`, and moving `filters.status` out. `.page(db, page)` receives a `Query<PageParams>` while the query method takes `PageParams`. One rule is needed, ideally with no `*`, `&` or `into_inner()` for the agent to choose.
+- **Nested routes.** Where `GET /shops/{shop_id}/orders` lives (in `orders/` or `shops/`) and how its handler is named (`list_in_shop`?) is undocumented: all three agents guessed.

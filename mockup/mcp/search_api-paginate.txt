@@ -12,6 +12,9 @@
      Order::query().all_owners("admin list").page_numbered(db, page).await?
 
 4. Page::map(f): convert each row when the view needs more than the row; keeps the cursor
-     orders.map(|order| OrderView::with_price(order, prices.get(order.product_code)))
+     orders.map(|order| {
+         let price = prices.get(order.product_code);
+         OrderView::with_price(order, price)
+     })
 
 more: explain("pagination")

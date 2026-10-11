@@ -12,8 +12,11 @@ Its API is not in your training data: look it up, never guess it.
 ## Working loop
 
 1. After each change, run `balise check`. It compiles the back end and the front end and explains each error.
-2. After each feature, run `balise audit` and fix every warning.
-3. Unclear error code: `balise explain <CODE>`.
+2. Run the tests with `balise test` (it starts the test database; `cargo test` also works when it runs).
+3. After each feature, run `balise audit` and fix every warning. It also lists the runtime errors seen in dev.
+4. Unclear error code: `balise explain <CODE>`.
+
+The dev server: `balise dev --detach` starts it in the background, `balise dev status` and `balise dev stop` control it, `balise logs` shows its recent events.
 
 `balise check` replaces `cargo check`, `tsc` and the linter: use it instead.
 
@@ -46,7 +49,9 @@ frontend/src/
 - No `static mut`, global state, `std::sync::Mutex`, `RefCell`, `tokio::spawn` or `println!`: use `State`, `Shared`, `balise::spawn` and `balise::log`.
 - Front end: call the API only through `frontend/src/balise`; never `fetch` `/api` directly.
 - Add a dependency with `balise add <package>`, never by editing `Cargo.toml` or `package.json`.
-- Never raise a budget in `budgets.toml` or accept a finding without asking the user.
+- Rename a model field with `balise rename <model>.<field> <new>`, never by hand: the migration must know it is a rename.
+- Lines between `balise:<resource>` and `/balise:<resource>` markers belong to generators: keep them together, so `balise remove resource` can find them.
+- Some changes are decisions, not fixes: raising a budget, `.accept`, `.unbounded`, `.all_owners`, `raw_unscoped`, a breaking migration, a new dependency. `.balise/policy.toml` says who takes each one. When it is the user, tell them to run `balise approve`; when it is you, use the `approve` tool with a reason. Never edit `.balise/policy.toml` or `.balise/approvals.toml`.
 
 ## This project
 

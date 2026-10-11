@@ -16,7 +16,6 @@ async fn create_returns_201(app: TestApp) {
     let order: OrderView = res.json();
     assert_eq!(order.quantity, 2);
     assert_eq!(order.status, OrderStatus::Pending);
-    res.assert_queries_at_most(1);
 }
 
 #[balise::test]

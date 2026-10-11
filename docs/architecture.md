@@ -104,5 +104,5 @@ Two separate worlds:
 | Databases: PostgreSQL and SQLite in the MVP, MySQL later | [data.md](data.md) |
 | First-class front end, React first, TanStack Query behind Balise's adapter | [web.md](web.md) |
 | Validation rules declared once in Rust, enforced on both sides | [web.md](web.md) |
-| Safe npm and crate defaults: 7-day release age, no install scripts, approval for new dependencies | [web.md](web.md#dependency-security) |
+| Safe npm and crate defaults: 7-day release age, no install scripts, new dependencies as sensitive decisions | [web.md](web.md#dependency-security) |
 | License: dual MIT or Apache-2.0 | — |

@@ -2,7 +2,10 @@
 
 use balise::prelude::*;
 
+use crate::users::User;
+
 #[derive(Input)]
+#[input(model = User)]
 pub struct SignUp {
     #[input(email)]
     pub email: String,
@@ -30,6 +33,7 @@ pub struct ResetPassword {
 }
 
 #[derive(Output)]
+#[output(from = User)]
 pub struct CurrentUserView {
     pub id: UserId,
     pub email: String,

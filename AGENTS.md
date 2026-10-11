@@ -30,7 +30,9 @@ docs/               architecture.md and one document per component
 4. **Every visible error has a stable code** (`DB0042`), a cause, a location, a suggested fix, and an explanation shown by `balise explain`.
 5. **The core never assumes an optional module.** Cross-module integrations compile only when both features are enabled.
 6. **Nothing dev-only in the production binary**: all dev tooling goes behind the `dev` feature.
-7. **Equivalent choices**: if two approaches are equally good, implement the simpler one and record the other in the log of alternatives ([docs/alternatives.md](docs/alternatives.md)).
+7. **The public API is the same in every build.** No public API changes availability with the build profile, except dev and test tooling (MCP, instrumentation, `TestApp`, factories, seeds).
+8. **No warning on correct code.** A detection that fires on code that is correct in most cases is not a warning: the right pattern becomes the default, or goes into the types. Warnings are for what is rare and almost always a real problem. A reminder is shown once.
+9. **Equivalent choices**: if two approaches are equally good, implement the simpler one and record the other in the log of alternatives ([docs/alternatives.md](docs/alternatives.md)).
 
 ## Before submitting a change
 

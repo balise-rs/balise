@@ -34,23 +34,30 @@ The ORM uses the same verbs as handlers ([application.md](application.md#routes-
 ```rust
 // src/orders/model.rs
 #[derive(Model)]
+#[model(owned_by = User)]
 struct Order {            // singular model, table `orders`
     id: OrderId,
-    shop_id: ShopId,
+    user: BelongsTo<User>,
     quantity: u32,
     note: Option<String>,
+    created_at: DateTime,
 }
 
 // src/orders/mod.rs
-#[post("/shops/{shop_id}/orders")]
-async fn create(shop_id: Path<ShopId>, input: Body<CreateOrder>, db: Db) -> Result<Created<OrderView>> {
-    let order = Order::create(db, input).await?;
+#[post("/orders")]
+async fn create(input: Body<CreateOrder>, user: CurrentUser, db: Db) -> Result<Created<OrderView>> {
+    let order = Order::create(db, NewOrder {
+        user: user.owner(),
+        quantity: input.quantity,
+        note: input.note.clone(),
+    })
+    .await?;
     Ok(Created(order.into()))
 }
 
 #[get("/orders/{id}")]
-async fn get(id: Path<OrderId>, db: Db) -> Result<OrderView> {
-    Ok(Order::get(db, *id).await?.into())     // missing row: 404
+async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> {
+    Ok(Order::get(db, *id).owned_by(&user).await?.into())     // missing row: 404
 }
 ```
 
@@ -61,13 +68,17 @@ async fn get(id: Path<OrderId>, db: Db) -> Result<OrderView> {
 | `Order::get_many(db, ids)` | several rows by id, in one query |
 | `Order::list(db, page)` | a `Page<Order>`; `.into()` turns it into a `Page<OrderView>`, `.map(f)` when the view needs more than the row |
 | `Order::query()` | filters, ordering, relations, then `.page(db, …)`, `.first(db)`… (see [Queries](#queries)) |
-| `Order::create(db, input)` | insert from an `Input`, or from a closure: `Order::create(db, \|o\| …)` |
-| `order.update(db, input)` | partial update from an `Input`, or from a closure |
-| `order.delete(db)` | delete |
+| `Order::create(db, NewOrder { … })` | insert one row |
+| `Order::get(db, id).for_update()` | the row, locked until the end of the request: a `Locked<Order>` |
+| `order.update(db, \|o\| …)` | change fields of a locked row; only what changed is written |
+| `order.delete(db)` | delete a locked row |
 
 - Models are singular (`Order`); tables are plural (`orders`).
 - `get` and `find` are the only close pair of verbs, and they differ in behavior: pick `get` when a missing row is an error, `find` when it is a normal case.
-- `create` and `update` take an `Input` or a closure. `.set(|o| …)` combines both, for fields the `Input` does not carry: `Order::create(db, input).set(|o| o.placed_from = ip)`. A required field given by none of them is a compile error naming it, or the earliest error possible.
+- **`create` takes a `NewOrder`**, a struct generated with the model, with only the fields the application must provide, all public. A missing field is rustc's own error (E0063). The handler copies the fields it accepts from the `Input` one by one: an `Input` never reaches the database as a whole.
+- **Fields with a declared default** (in the model or the database, such as a `status` that starts `pending`) are not in `NewOrder`. To set one, chain `.with_status(OrderStatus::Paid)` on the `NewOrder`; it returns an `Insert<Order>` that accepts more `.with_*`, and `create` takes either form. Fields managed by Balise (`id`, `created_at`, `updated_at`) have no `with_`.
+- **`update` takes a closure** over `&mut Order`, with plain assignments. Balise compares before and after and writes only what changed. A patch input applies itself: `order.update(db, |o| input.apply_to(o))`.
+- **Only a locked row can be written** ([Locking rows](#locking-rows)): `update` and `delete` exist on `Locked<Order>`, returned by `.for_update()`, not on `Order`.
 - Methods that concern one model are written as methods on it, in `model.rs` (`impl Order { fn is_late(&self) … }`).
 
 ## Three roles, three types
@@ -78,7 +89,8 @@ async fn get(id: Path<OrderId>, db: Db) -> Result<OrderView> {
 | `Model` | what is stored | `Order` |
 | `Output` | what goes out | `OrderView` |
 
-- Conversions between them are generated when field names and types match: `Order::create(db, input)` accepts a `CreateOrder`, and `order.into()` produces an `OrderView`.
+- **Links are written on the types**, so they can be read in the code: `#[output(from = Order)]` on `OrderView` generates `OrderView { id: order.id, … }` by field name, and a field missing from `Order` is a plain rustc error. `#[input(model = Order)]` on `CreateOrder` applies the model's rules to the fields of the same name.
+- From an `Input` to the database, the handler writes the `NewOrder` itself (see [Naming](#naming)).
 - **A model is never returned from a handler.** Returning an `Order` is a compile error pointing to `OrderView`. An agent cannot expose a field such as `password_hash` by accident.
 
 ## Schema: models are the source of truth
@@ -87,16 +99,17 @@ Models declare everything the database needs: columns, types, defaults, constrai
 
 ```rust
 #[derive(Model)]
-#[index(shop_id, created_at)]
+#[index(shop, created_at)]
 struct Order {
     id: OrderId,
-    #[field(references = Shop)]
-    shop_id: ShopId,
+    #[field(on_delete = restrict)]
+    shop: BelongsTo<Shop>,
     #[field(default = 1, check = "quantity > 0")]
     quantity: u32,
     #[field(unique)]
     reference: String,
     note: Option<String>,
+    created_at: DateTime,
 }
 ```
 
@@ -130,24 +143,38 @@ ALTER TABLE products ALTER COLUMN category SET NOT NULL;
 ```
 
 - A migration with an unwritten data step cannot be applied: `balise migrate` stops with an error pointing to it.
-- Data steps are written in the project's SQL dialect, and `balise check` runs them against a test database. A step too complex for SQL can be written in Rust, with the ORM, inside the migration's transaction.
+- Data steps are written in the project's SQL dialect, and `balise check` runs them against a test database. A step too complex for SQL can be written in Rust, inside the migration's transaction, but never with the models: they change after the migration is written, and the step would stop compiling. It uses `db.sql` with its own row structs, declared in the migration file, and imports nothing from `crate::`. `balise check` validates its SQL against the snapshot of that migration, not the current one, so the step keeps compiling and stays correct forever.
 - Generated steps handle each engine's limits (SQLite, for example, rebuilds the table to add a `NOT NULL` constraint).
 - `balise migrate new --sql` creates an empty migration for anything the models cannot express.
 
 ## Draft migrations
 
-Balise cannot see production from dev, so "never deployed" is recorded, not guessed.
+Balise cannot see production from dev, so "deployed" is recorded, not guessed.
 
-- **A migration is a draft until it reaches production.** `balise build` freezes the migrations it ships, by recording them in a versioned file.
-- **A draft can be rewritten freely.** Removing a resource rewrites the migration that created its table instead of stacking a drop; squashing a feature's migrations is the same mechanism. A frozen migration is never rewritten: changes after it are new migrations.
-- **In dev, the database is rebuilt** from the drafts when one is rewritten, then filled again by the seeds. This is why seeds matter: data that only exists in the dev database is lost at the next rebuild, and `balise migrate` says so before rebuilding.
+- **There is at most one draft**, which the agent can regenerate freely. Removing a resource rewrites it instead of stacking a drop; squashing a feature's changes is the same mechanism.
+- **`balise migrate freeze`** names the draft and makes it a regular migration. A frozen migration is never rewritten: later changes go to a new draft.
+- **Guard rails**: `balise check --ci` fails while a draft remains, and a release build refuses to embed one. Staging and production only ever apply frozen migrations.
+- **In dev, the database is rebuilt** when the draft is rewritten, then filled again by the seeds. This is why seeds matter: data that only exists in the dev database is lost at the next rebuild, and `balise migrate` says so before rebuilding.
+
+### Compatible and breaking changes
+
+Migrations applied at startup are safe during a rolling deploy as long as they keep the previous version working. `balise migrate` classifies every change:
+
+- **compatible**: a table, a nullable column, an index;
+- **breaking**: a drop, a rename, a new `NOT NULL`.
+
+A breaking change is split over two versions (add, then remove in the next one), or marked `--breaking`, a [sensitive decision](agent-experience.md#sensitive-decisions), reported as "deploy with downtime". For teams that migrate in a separate step, a setting makes startup fail when a migration is pending.
+
+### Never interactive
+
+`balise migrate` never asks a question. When a change is ambiguous (a column disappears and another one appears), it fails with a code and commands ready to paste: `--rename orders.contact=email` or `--drop orders.contact`.
 
 ## Renames
 
 A rename is recorded in the migration history, never in the model: no `renamed_from` attribute, no dead code left after the migration.
 
 - **A rename is an action, not a guess.** `balise rename orders.taille hauteur` (also an MCP tool) renames the field in the model, updates references in the code, and records the rename in the pending migration.
-- **A manual rename is never guessed.** When a column disappears and another with a compatible type appears, `balise migrate` asks whether it is a rename or a drop and an add, in the terminal or through MCP. When nobody can answer (in CI), it stops with an error giving the exact flag: `--rename orders.taille=hauteur`.
+- **A manual rename is never guessed.** When a column disappears and another with a compatible type appears, `balise migrate` stops with an error giving both commands: `--rename orders.taille=hauteur` or `--drop orders.taille` ([Never interactive](#never-interactive)).
 - **Errors use the history.** When code uses an old name, `balise check` reads the migration history: "`taille` was renamed to `hauteur` in migration 0007".
 - **Reusing an old name.** Renaming `taille` to `hauteur` and adding a new `taille` in the same change cannot be detected by a diff: it looks like "`taille` unchanged, `hauteur` added", and the old data would stay in `taille` with a new meaning. Two safeguards:
   - `AGENTS.md` requires `balise rename` for every rename, which records it before the new field exists;
@@ -159,7 +186,7 @@ Queries are built with closures over a generated column struct: plain Rust, type
 
 ```rust
 let orders = Order::query()
-    .filter(|o| o.shop_id.eq(shop_id).and(o.quantity.gt(3)))
+    .filter(|o| o.shop.eq(shop_id).and(o.quantity.gt(3)))
     .order_by(|o| o.created_at.desc())
     .page(db, page)
     .await?;
@@ -182,7 +209,9 @@ Terminal methods:
 
 **`.all(db)` exists only after `.limit(n)` or `.unbounded(reason)`.** A query without either is a compile error pointing to `.page()` or `.limit()`. The type system enforces it, no lint needed.
 
-When loading everything is really intended, it is said explicitly: `.unbounded("export of all shops, run nightly")`. The reason is required, every unbounded query is listed in the audit, and adding one is flagged by `balise check` as a change that needs human approval.
+**What the type of a query tracks.** Two states, both set at the end of the chain: whether the query is bounded (`.limit()`, `.page()`, `.unbounded()`), and whether its scope is chosen ([Ownership](#ownership)). Filters, ordering and `.with()` keep the type, so a query can be built with `if`. A missing bound or scope is reported through `#[diagnostic::on_unimplemented]` with a Balise message and code, then enriched by `balise check`; the internal state types never appear in the message. The compile cost of these two states is measured by the compile benchmark.
+
+When loading everything is really intended, it is said explicitly: `.unbounded("export of all shops, run nightly")`. The reason is required, every unbounded query is listed in the audit, and adding one is a [sensitive decision](agent-experience.md#sensitive-decisions).
 
 Rejected alternatives: typed column constants (`order::Column::Quantity.gt(3)`: verbose, and the module name collides with the resource folder), and a macro translating Rust expressions into SQL (most natural to read, but a heavy macro with costly compile times and hard-to-read errors).
 
@@ -194,11 +223,12 @@ The escape hatch for what the builder cannot express:
 #[derive(Row)]
 struct ShopStats { shop_id: ShopId, revenue: i64 }
 
-let stats: Vec<ShopStats> = db.sql("SELECT shop_id, SUM(total) AS revenue FROM orders WHERE created_at > $1 GROUP BY shop_id", (since,)).await?;
+let stats: Vec<ShopStats> = db.sql("SELECT shop_id, SUM(total)::bigint AS revenue FROM orders WHERE created_at > $1 GROUP BY shop_id", (since,)).await?;
 ```
 
 - `balise check` validates raw SQL against the schema snapshot (tables, columns, types), with no database.
 - Every raw query is listed in the audit, so it stays an exception.
+- `balise check` rejects `db.sql` on an owned table: raw SQL there goes through `db.raw_unscoped(reason, …)`, a [sensitive decision](agent-experience.md#sensitive-decisions) ([Ownership](#ownership)).
 
 ## Types
 
@@ -289,7 +319,7 @@ Why opt-in: keeping data that a user asked to delete is a legal and product deci
 
 ### Database names
 
-All derived, none to write: tables plural and snake_case (`orders`, `product_tags`), columns named after fields, foreign keys `<model>_id`, and deterministic constraint and index names (`orders_reference_key`, `orders_quantity_check`, `orders_shop_id_created_at_idx`).
+All derived, none to write: tables plural and snake_case (`orders`, `product_tags`), columns named after fields, a `BelongsTo` field `shop` stored as `shop_id`, and deterministic constraint and index names (`orders_reference_key`, `orders_quantity_check`, `orders_shop_id_created_at_idx`).
 
 Every name can be set explicitly, for an irregular plural or an existing database:
 
@@ -307,11 +337,11 @@ Declared in the model:
 
 | Constraint | Declaration |
 | --- | --- |
-| unique | `#[field(unique)]`, or `#[unique(shop_id, reference)]` on the model |
+| unique | `#[field(unique)]`, or `#[unique(shop, reference)]` on the model |
 | check | `#[field(check = "quantity > 0")]` |
 | foreign key | `#[field(references = Shop, on_delete = restrict)]` |
 | default | `#[field(default = 1)]` |
-| index | `#[index(shop_id, created_at)]` on the model |
+| index | `#[index(shop, created_at)]` on the model |
 
 Check expressions are written in the project's SQL dialect and validated against the schema snapshot.
 
@@ -322,16 +352,16 @@ Constraint names lead back to fields, so every violation becomes a Balise error 
 | Violation | Response |
 | --- | --- |
 | unique | `409`: "`reference` already exists" |
-| foreign key on insert | `422`: "`shop_id`: shop `shp_…` does not exist" |
+| foreign key on insert | `422`: "`shop_id`: shop `sho_…` does not exist" |
 | foreign key on delete | `409`: "the shop still has 12 orders" |
 | check | `422`: the field and the rule |
 
 ### Constraints declared once
 
-An `Input` whose fields match a model inherits the model's constraints. `max_length = 120` or `check = "quantity > 0"` on `Order` apply automatically to `CreateOrder`, then to the validation generated for the front end ([web.md](web.md#forms)). A rule declared once in the model protects the database, the API and the form.
+`#[input(model = Order)]` links an `Input` to its model: the model's rules apply to the input's fields of the same name, then to the validation generated for the front end ([web.md](web.md#forms)). `max_length = 120` or `check = "quantity > 0"` on `Order` protect the database, the API and the form. The model's derive generates one hidden validation function per field, and the input's derive calls them by name, without needing to see the model.
 
 - Rules add up: the model's always apply, and the `Input`'s are added to them. An `Input` can add rules, never loosen them.
-- Rules that contradict each other in a detectable way (`min = 0` on the input against `check = "quantity > 0"` on the model) are a compile error.
+- Rules that contradict each other (`min = 0` on the input against `check = "quantity > 0"` on the model) are reported by `balise check`, which gives a readable message; compile-time assertions would not.
 - Checks that cannot be translated outside SQL stay database-only, and their violation is still reported on the right field.
 
 ## Ownership
@@ -341,50 +371,71 @@ Forgetting to filter by owner exposes other users' data (IDOR), and it is the ea
 ```rust
 #[derive(Model)]
 #[model(owned_by = User)]          // or Team, Organization…
-struct Order { id: OrderId, user_id: UserId, … }
+struct Order { id: OrderId, user: BelongsTo<User>, … }
 
 #[derive(Model)]
 #[model(owned_through = order)]    // owned by the order's owner
-struct OrderLine { id: OrderLineId, order_id: OrderId, … }
+struct OrderLine { id: OrderLineId, order: BelongsTo<Order>, … }
 ```
 
-- **Every query on an owned model** calls `.owned_by(owner)` or `.all_owners(reason)`, or it does not compile. This includes `get`: `Order::get(db, id).owned_by(&user)` answers `404`, not `403`, for an id that belongs to someone else, so its existence is not revealed.
-- **Creating** an owned row: `.owned_by(owner)` fills the owner field: `Order::create(db, input).owned_by(&user)`.
+- **Every query on an owned model** calls `.owned_by(&user)` or `.all_owners(reason)`, or it does not compile. Both lead to the same state, "scope chosen", so `if admin { q.all_owners("admin screen") } else { q.owned_by(&user) }` compiles. The error when the scope is missing says exactly that: choose `.owned_by(&user)` or `.all_owners(reason)`.
+- **No shortcut skips the scope.** `get`, `find`, `update` and `delete` on an owned model go through the same rule: `Order::get(db, id).owned_by(&user)` answers `404`, not `403`, for an id that belongs to someone else, so its existence is not revealed. `Order::get(db, id)` alone does not compile.
+- **Public models** (`#[model(public)]`) start with their scope chosen: nothing to write.
+- **The owner field is checked by the compiler.** `owned_by = User` requires a `BelongsTo<User>` field; `owned_through = order` requires an `order: BelongsTo<Order>` field to a model that is itself owned. `owned_by = User` on a model without a `User` field fails with a message that suggests `owned_through`.
+- **Creating** an owned row: the owner field of `NewOrder` has the type `OwnerId<User>`, built only from an owner: `user: user.owner()`. It does not implement `Deserialize`, so no `Input` can carry it, and `user: input.user_id` does not compile: mass assignment of the owner is impossible.
 - **`owned_by` takes `&user`** (a `CurrentUser`), as many times as needed: `.owned_by(&user)` is the documented form. It also accepts an `Owner`, a `Copy` marked id obtained from `Owner::trusted(id, reason)` for an in-house authentication. Never an id read from an `Input`.
-- **In dev and test builds**, `.owned_by(&user)` also accepts a `User` loaded from the database, for seeds and tests.
+- **The same API in every build.** Tests use the user returned by `app.sign_in_as_new_user()`, which provides `.owner()` like `CurrentUser`. Factories and seeds, which exist only in dev and test, take an owner as they like.
 - **Factories are exempt**: `Order::fake()` creates a parent owner when none is given, which is how tests simulate other users' data. `Order::fake().owned_by(&user)` picks the owner.
-- **`.all_owners(reason)`** is for admin screens and jobs. Like `.unbounded()`, the reason is required, every use is listed in the audit, and adding one is flagged by `balise check` for human approval.
+- **`.all_owners(reason)`** is for admin screens and jobs. Like `.unbounded()`, the reason is required, every use is listed in the audit, and adding one is a [sensitive decision](agent-experience.md#sensitive-decisions).
 - **The mechanism belongs to the ORM**, not to the `auth` module: it works the same with an in-house authentication.
+- **No bypass through other paths:**
+  - loading an owned relation from a parent that is not owned (the reviews of a public product) needs a scope on the relation itself: `.with(|p| p.reviews.owned_by(&user))`, or `.all_owners(reason)`;
+  - `upsert` on an owned model includes the owner in its conflict key, so it can never overwrite another user's row;
+  - raw SQL on an owned table goes through `db.raw_unscoped(reason, …)`, listed in the audit, a [sensitive decision](agent-experience.md#sensitive-decisions) like the other escape hatches;
+  - mass assignment of the owner is impossible: `OwnerId<User>` is not deserializable ([Naming](#naming)).
+- **Several owners** (a marketplace where an order belongs to the customer and to the shop's owner, a team) are outside the MVP. The design does not block them: a marketplace combines several owner columns with `OR`, a team is `owned_by = Team` with an `Owner<Team>` obtained from a membership check written by the application. `Owner` stays generic internally.
 - **A model with a foreign key to `User` must say which it is**: `owned_by`, or `#[model(public)]`. Leaving it undecided is a compile error.
 
 ## Relations
 
 ### Declaring
 
-Relations are deduced from foreign keys: `#[field(references = Shop)] shop_id` on `Order` creates `order.shop` and `shop.orders`. The foreign key is the single source of truth.
-
-Declaring the relation on the other side is optional, for readability:
+Relations are fields of the model, so the agent sees them where it reads the model:
 
 ```rust
 #[derive(Model)]
-#[has_many(Order)]          // optional: makes `shop.orders` visible in Shop's definition
-struct Shop { id: ShopId, name: String }
+struct Order {
+    id: OrderId,
+    shop: BelongsTo<Shop>,     // the column `shop_id`, and the relation
+    …
+}
+
+#[derive(Model)]
+struct Shop {
+    id: ShopId,
+    name: String,
+    orders: HasMany<Order>,    // no column: the other side of `Order.shop`
+}
 ```
 
-- An optional declaration must match a foreign key: a `has_many` with no matching key is a compile error.
-- Two keys to the same table (`author_id` and `reviewer_id` to `User`) are ambiguous: Balise refuses to compile until each one is named (`#[field(references = User, as = "reviews")]`).
+- `BelongsTo<Shop>` is the only field for the relation: it holds the foreign key (`order.shop.id()`, always available) and, once loaded, the shop. The column is named `shop_id`.
+- `HasMany<Order>` must match a `BelongsTo<Shop>` on `Order`, or it does not compile. With two keys to the same model (`author` and `reviewer`, both `BelongsTo<User>`), it says which: `#[relation(by = author)] posts: HasMany<Post>`.
 - Many-to-many relations always go through an explicit join model (`ProductTag`), which can carry its own columns.
 
 ### Loaded data
 
-A relation field knows whether it was loaded:
-
 ```rust
-let shop = Shop::query().with(|s| s.orders.limit(20)).one(db).await?;
-let orders = shop.orders.get()?;       // loaded: the orders
+let order = Order::query().owned_by(&user).with(|o| o.shop).one(db).await?;
+let shop = order.shop.loaded();        // &Shop, loaded by .with()
+let shop_id = order.shop.id();         // always available, no query
 ```
 
-If the relation was not loaded, `.get()` returns an error with the fix ("add `.with(|s| s.orders)` on line 42"). Reading a relation never runs a hidden query.
+- `.loaded()` returns `&Shop` for a `BelongsTo`, `&[Order]` for a `HasMany`. The name says what it requires; `get` would suggest an `Option`, as in `Vec::get`.
+- **A relation that was not loaded panics**, with a code and the fix ("add `.with(|o| o.shop)` on line 42"): it is a programming error, like an index out of bounds, not a case to handle. In a request, the panic is caught and becomes a `500` with the code in the logs; tests catch it.
+- Because reading is infallible, converting to an `Output` that includes a relation stays a plain `.into()`, and `Page::map` needs no `try_map`.
+- There is no `Deref` to the related model: a dereference that panics would surprise, and it would hide `.id()`.
+- Reading a relation never runs a hidden query.
+- Later, in dev: report a `.loaded()` on a relation that, for the same route, is sometimes loaded and sometimes not (a `.with()` in one branch only), which tests may miss.
 
 ### Loading strategy
 
@@ -478,12 +529,15 @@ The generated client knows each route's mode and limits: infinite scroll for cur
 ### Converting a page
 
 - `.into()` converts each row directly (`From<Order> for OrderView`). It is `.map(Into::into)`, shorter for the common case.
-- `.map(f)` is for a conversion that needs more than the row: a value from `State`, an aggregate loaded beforehand. It keeps the cursor and the page's metadata, computed on the rows, so the view does not need to carry the sort key.
+- `.map(f)` is for a conversion that needs more than the row: a value from `State`, an aggregate loaded beforehand. It keeps the cursor and the page's metadata, computed on the rows, so the view does not need to carry the sort key. The closure is `FnMut`, so it can take values out of an index (`stats.take(id)`).
 - **The closure is synchronous, on purpose.** It cannot `.await`, so it cannot run a query per row: the N+1 is impossible to write, rather than detected at runtime. An `.await` in it is a compile error, enriched by `balise check` with a code and the way to do it: load in bulk (`.with()` for relations), then map.
 
 ```rust
 let orders = Order::query().owned_by(&user).page(db, page).await?;
-Ok(orders.map(|order| OrderView::with_price(order, prices.get(order.product_code))))
+Ok(orders.map(|order| {
+    let price = prices.get(order.product_code);   // read before `order` is moved
+    OrderView::with_price(order, price)
+}))
 ```
 
 Data that is not a relation (an aggregate in raw SQL, a value from another service) is loaded in bulk with the page's ids, then indexed:
@@ -497,12 +551,13 @@ let users = User::query().page(db, page).await?;
 let mut stats = db.sql::<UserStats>("SELECT user_id, COUNT(*) AS orders FROM orders WHERE user_id = ANY($1) GROUP BY user_id", (users.ids(),))
     .await?
     .index_by(|s| s.user_id);
-Ok(users.map(|user| UserView::new(user, stats.take(user.id))))
+Ok(users.map(|user| {
+    let user_stats = stats.take(user.id);
+    UserView::new(user, user_stats)
+}))
 ```
 
 For relations, `.with()` stays the way: these helpers are for what has no foreign key.
-
-To settle with relations: reading a loaded relation returns a `Result` (`order.user.get()?`), which a synchronous closure cannot propagate. Options: a relation loaded by `.with()` changes type and is read without `Result`; a `try_map`; or loading driven by the `Output` ([experimental](#loading-driven-by-the-output-experimental)).
 
 ## Writes and transactions
 
@@ -510,51 +565,98 @@ To settle with relations: reading a loaded relation returns a `Result` (`order.u
 
 Every request runs in a transaction that opens lazily:
 
-- it opens at the first write;
+- it opens at the first write, or at the first `.for_update()`;
 - it commits when the handler succeeds, and rolls back when it returns an error;
 - a handler that only reads never opens one.
 
-A handler that writes to two tables is atomic without the agent thinking about it, and read-only handlers pay nothing. `db.transaction(|tx| …)` stays available for background tasks and fine control. Dev instrumentation flags a network call made while a transaction is open.
+A handler that writes to two tables is atomic without the agent thinking about it, and read-only handlers pay nothing. `db.transaction(|tx| …)` stays available for background tasks and fine control. Dev instrumentation flags a network call made while a transaction is open: it holds the transaction's locks during the call (on SQLite, it blocks every write of the application, so the flag is a warning there).
+
+### Locking rows
+
+Reading a row, checking it, then writing it is the shape every agent writes. Without a lock, two concurrent requests can both pass the check. So the lock is part of the types:
+
+```rust
+let order = Order::get(db, *id).owned_by(&user).for_update().await?;   // Locked<Order>
+if order.status != OrderStatus::Pending {
+    return Err(OrderError::NotPending.into());
+}
+order.update(db, |o| o.status = OrderStatus::Cancelled).await?;
+```
+
+- `get` without `.for_update()` returns an `Order`, read-only. `update`, `delete` and `apply_to` exist only on `Locked<Order>`, which reads like an `Order` (an infallible `Deref`).
+- Forgetting `.for_update()` is a compile error, with a code and the exact fix: nothing to judge. Generated `update` and `delete` handlers already have it.
+- `.for_update()` opens the request's transaction and locks the row until the commit (`SELECT … FOR UPDATE` on PostgreSQL, `BEGIN IMMEDIATE` on SQLite, which locks the whole database for writes).
+- Two requests that lock two rows in opposite orders deadlock; PostgreSQL detects it and Balise reports it with its own code, the two locations and the fix (lock in a fixed order, or lock fewer rows).
+- Writes through a query (`query().filter(…).update(…)`, atomic counters) need no lock: they are atomic already.
+
+### Writes that survive the request
+
+Some writes must be kept even when the request fails: failed sign-in attempts, rate-limit counters, an audit log. `db.independent()` gives a `Db` whose writes are not part of the request's transaction:
+
+```rust
+db.independent().create(NewSignInAttempt { … }).await?;   // kept even if the request fails
+```
+
+- On PostgreSQL, it uses a second connection from the pool, committed at once: a handler using it holds two connections, to keep in mind when sizing the pool.
+- On SQLite, a second writer would wait for the request's lock, so independent writes are queued and run as soon as the request's transaction ends, committed or rolled back. They are still kept when the request fails; they are just not visible before the request ends.
+- The `auth` module uses it for sign-in attempts and rate limits. For the application, it is a named escape hatch, listed in the audit.
 
 ### Side effects after commit
 
-When a transaction is open, `channels.publish()`, `mailer.send()` and `balise::spawn()` are deferred until it commits. If it rolls back, they never run: no email or realtime event for data that was never saved.
+Each side effect is handled according to what losing it costs:
+
+| Effect | When it runs | If the process crashes |
+| --- | --- | --- |
+| `channels.publish()` | after the commit, from memory | lost: realtime events are ephemeral, clients reload on reconnection |
+| `mailer.send()` | written to the `balise_outbox` table in the request's transaction, sent by a worker | kept: sent at least once |
+| `db.after_commit(async { … })` | after the commit; at the end of the request if no transaction was opened; dropped after a rollback | lost |
+| `balise::spawn(\|db\| async { … })` | at once, never deferred | lost |
+
+- **`balise_outbox`** is an internal table managed by Balise: it appears in the snapshot and the migrations, and the agent never edits it. Mails are delivered at least once, with retries; each carries a stable `Message-ID`, so a resend can be recognized. With several instances, the worker claims mails with `FOR UPDATE SKIP LOCKED`.
+- `mailer.send()` returns an error only for an invalid address: sending happens later.
+- **Without the `orm` module**, there is no outbox: `mailer.send()` sends from memory after the request, and is lost on a crash. The durable integration compiles only when both `mail` and `orm` are enabled.
+- **`balise::spawn`** has the same meaning everywhere. Its task gets its own `Db` and follows the rules of a request: lazy transaction, committed if the future returns `Ok`, rolled back on `Err`. A request's `Db` used after its request ended returns an error with a code; `balise check` also warns when a closure passed to `spawn` captures the request's `db`.
+- A durable job queue, built on the outbox, is a later module.
 
 ### Partial updates
 
 ```rust
 #[derive(Input)]
-#[input(patch)]
+#[input(model = Order)]
 struct UpdateOrder {
-    quantity: u32,
-    note: Option<String>,
+    quantity: Patch<u32>,
+    note: Patch<Option<String>>,
 }
+
+let order = Order::get(db, *id).owned_by(&user).for_update().await?;
+order.update(db, |o| input.apply_to(o)).await?;
 ```
 
-With `#[input(patch)]`, every field becomes optional: an absent field is left unchanged, and `null` clears a nullable field. The agent writes plain types; Balise generates the rest, TypeScript included. `order.update(db, input)` writes only the fields that were sent.
+`Patch<T>` is one type for every field of a partial update: absent leaves the field unchanged, a value sets it, and `null` clears a nullable field. `null` on a field that is not nullable is a `422`. The derive generates `apply_to`, and the TypeScript type marks each field optional.
 
 ### Updates in business logic
 
 ```rust
+let order = Order::get(db, *id).owned_by(&user).for_update().await?;
 order.update(db, |o| o.status = Status::Paid).await?;
 ```
 
-One verb, `update`, accepts an `Input` or a closure. With a closure, Balise compares before and after and writes only what changed. There is no `save()`.
+One verb, `update`, with a closure over `&mut Order`, on a locked row. Balise compares before and after and writes only what changed. There is no `save()`.
 
 ### Concurrent writes
 
-- Atomic operations for read-modify-write: `|o| o.stock.decrement(1)` generates `SET stock = stock - 1`, together with a constraint such as `check = "stock >= 0"`.
+- Atomic operations for read-modify-write go through a query, whose closure works on columns, not values: `Product::query().filter(|p| p.id.eq(id)).update(db, |p| p.stock.decrement(1))` generates `SET stock = stock - 1`, together with a constraint such as `check = "stock >= 0"`.
 - Dev instrumentation detects the "read, then write back a computed value" pattern on numeric columns and suggests the atomic form.
-- Optional optimistic locking with `#[model(versioned)]`, for models edited by several people at once.
+- Read, check, write on one row: [Locking rows](#locking-rows). Atomic counters and row locks do not overlap: a counter computed by SQL needs no lock, a decision taken in Rust needs one.
 
 ### Bulk writes and conflicts
 
 | Method | Purpose |
 | --- | --- |
-| `Order::create_many(db, inputs)` | insert many rows in one query |
+| `Order::create_many(db, new_orders)` | insert many rows in one query, from a `Vec<NewOrder>` |
 | `Order::query().filter(…).update(db, …)` | bulk update |
 | `Order::query().filter(…).delete(db)` | bulk delete |
-| `Order::upsert(db, input, \|o\| o.reference)` | insert, or update on a unique key |
+| `Order::upsert(db, new_order, \|o\| o.reference)` | insert, or update on a unique key; on an owned model, the key includes the owner |
 
 - A bulk update or delete without a filter follows the rule of `.all()`: it needs `.unbounded(reason)`.
 - A unique violation becomes a `409` naming the field.
@@ -605,7 +707,7 @@ A `LIKE '%…%'` is sometimes the right choice, an index on everything slows wri
       .accept(PERF0007, "name search on a table capped at 10k rows")
   ```
 
-  The reason is required. Like budgets, adding an `accept` is flagged by `balise check` as a change that needs human approval, so an agent cannot silence a finding on its own.
+  The reason is required. Like raising a budget, adding an `accept` is a [sensitive decision](agent-experience.md#sensitive-decisions), so an agent cannot silence a finding unnoticed.
 - **An accepted finding comes back when its context changes.** Balise records the table size at the time it was accepted; if the audit later measures ten times more rows, the finding is reported again.
 - **Baseline for existing projects.** `balise check --baseline` records current findings in `perf-baseline.toml`. Only new findings are reported; the baseline shrinks as findings are fixed.
 - **Ranked output.** `balise check` shows errors first, then new warnings, then one summary line for the rest ("97 known findings, see `balise audit`").
@@ -655,3 +757,13 @@ A `#[field(personal)]` attribute would mark personal data, and serve three purpo
 ## Production feedback
 
 Production reports ([errors-and-logs.md](errors-and-logs.md#production-findings)) bring real table sizes, index usage and costly queries back into the dev loop. When a measured size is far from `expected_rows`, Balise suggests updating the declaration.
+
+## Open questions
+
+From the review of the mock-up by agents (2026-10-11):
+
+- **`.with()` has two meanings**: loading a relation on a query, and setting fields on a factory (`Order::fake().with(|o| …)`), Factories could take a `NewOrder`-like literal with defaults instead.
+- **`get` has five meanings**: the route attribute, the handler name, `Order::get`, a relation's `.get()`, and the test client's `app.get`. And one row can be read four ways: `get` / `.one()` (error when missing), `find` / `.first()` (`Option`), plus `Model::list` next to `query().page()`. `find` returning an `Option` is the opposite of Rails, which agents know.
+- **Two vocabularies for constraints**: `max_length` and SQL `check` on models, `length(max)` and `min` / `max` on inputs. Inheritance by field name is unpredictable: in the mock-up, `SignUp.email` gets `max 254` from `User`, `SignIn.email` gets nothing. One vocabulary, and an explicit link between an input and its model.
+- **Paginating a relation**: `.with(|s| s.orders.limit(20))` exists, a page of a relation with a cursor (a shop's orders) does not.
+- **Prefixed ids**: two models with the same first three letters get the same prefix; parsing a prefixed id that does not match the expected model needs a defined error.

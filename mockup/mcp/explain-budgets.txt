@@ -1,7 +1,7 @@
 Budgets
 
 Every route has a budget: a maximum number of queries and a maximum response size.
-Tests fail when a route goes over it. Latency is reported by `balise audit`, never enforced.
+Every request made in a test checks its route's budget, and fails over it. Latency is reported by `balise audit`, never enforced.
 
 Defaults, from the shape of the route:
   returns Page<T>          2 queries, 100 KB
@@ -13,5 +13,6 @@ Override one route in budgets.toml, by handler:
   ["orders::list"]
   queries = 3
 
-Raising a budget needs human approval: `balise check` flags every increase.
+Lowering a value is free. Raising one is a sensitive decision: .balise/policy.toml says
+whether you or the user takes it.
 See each route's budget and where it comes from: project_map(resource: "orders"), or `balise routes`.

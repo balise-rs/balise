@@ -6,45 +6,268 @@
     "name": "Order",
     "file": "src/orders/model.rs",
     "table": "orders",
-    "owned_by": { "model": "User", "field": "user_id" },
+    "owned_by": {
+      "model": "User",
+      "field": "user"
+    },
     "expected_rows": "1M",
     "fields": [
-      { "name": "id", "type": "OrderId", "prefix": "ord" },
-      { "name": "user_id", "type": "UserId", "references": "User", "on_delete": "restrict" },
-      { "name": "quantity", "type": "u32", "default": 1, "check": "quantity > 0" },
-      { "name": "note", "type": "String", "optional": true, "max_length": 500 },
-      { "name": "status", "type": "OrderStatus", "default": "pending" },
-      { "name": "created_at", "type": "DateTime" },
-      { "name": "updated_at", "type": "DateTime" }
+      {
+        "name": "id",
+        "type": "OrderId",
+        "prefix": "ord"
+      },
+      {
+        "name": "user",
+        "type": "BelongsTo<User>",
+        "column": "user_id",
+        "on_delete": "restrict"
+      },
+      {
+        "name": "quantity",
+        "type": "u32",
+        "check": "quantity > 0"
+      },
+      {
+        "name": "note",
+        "type": "String",
+        "optional": true,
+        "max_length": 500
+      },
+      {
+        "name": "status",
+        "type": "OrderStatus",
+        "default": "pending"
+      },
+      {
+        "name": "created_at",
+        "type": "DateTime"
+      },
+      {
+        "name": "updated_at",
+        "type": "DateTime"
+      }
     ],
-    "indexes": [["user_id", "created_at"]]
+    "indexes": [
+      [
+        "user",
+        "created_at"
+      ]
+    ]
   },
   "routes": [
-    { "method": "GET", "path": "/orders", "handler": "orders::list", "location": "src/orders/mod.rs:13", "query": ["OrderFilters", "PageParams"], "status": 200, "output": "Page<OrderView>", "pagination": { "mode": "cursor", "default": 20, "max": 100 }, "errors": [], "budget": { "queries": 2, "response_size": "100KB", "source": "default" } },
-    { "method": "GET", "path": "/orders/{id}", "handler": "orders::get", "location": "src/orders/mod.rs:24", "status": 200, "output": "OrderView", "errors": [{ "status": 404, "code": "DB0042" }], "budget": { "queries": 2, "response_size": "10KB", "source": "default" } },
-    { "method": "POST", "path": "/orders", "handler": "orders::create", "location": "src/orders/mod.rs:29", "body": "CreateOrder", "status": 201, "output": "OrderView", "errors": [{ "status": 422, "code": "VAL0001" }], "budget": { "queries": 2, "response_size": "10KB", "source": "default" } },
-    { "method": "PATCH", "path": "/orders/{id}", "handler": "orders::update", "location": "src/orders/mod.rs:35", "body": "UpdateOrder", "status": 200, "output": "OrderView", "errors": [{ "status": 404, "code": "DB0042" }, { "status": 422, "code": "VAL0001" }], "budget": { "queries": 2, "response_size": "10KB", "source": "default" } },
-    { "method": "DELETE", "path": "/orders/{id}", "handler": "orders::delete", "location": "src/orders/mod.rs:41", "status": 204, "errors": [{ "status": 404, "code": "DB0042" }], "budget": { "queries": 2, "response_size": "10KB", "source": "default" } },
-    { "method": "POST", "path": "/orders/{id}/cancel", "handler": "orders::cancel", "location": "src/orders/mod.rs:47", "status": 200, "output": "OrderView", "errors": [{ "status": 404, "code": "DB0042" }, { "status": 409, "code": "ORD0001" }], "budget": { "queries": 2, "response_size": "10KB", "source": "default" } }
+    {
+      "method": "GET",
+      "path": "/orders",
+      "handler": "orders::list",
+      "location": "src/orders/mod.rs:13",
+      "query": [
+        "OrderFilters",
+        "PageParams"
+      ],
+      "status": 200,
+      "output": "Page<OrderView>",
+      "pagination": {
+        "mode": "cursor",
+        "default": 20,
+        "max": 100
+      },
+      "errors": [],
+      "budget": {
+        "queries": 2,
+        "response_size": "100KB",
+        "source": "default"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/orders/{id}",
+      "handler": "orders::get",
+      "location": "src/orders/mod.rs:24",
+      "status": 200,
+      "output": "OrderView",
+      "errors": [
+        {
+          "status": 404,
+          "code": "DB0042"
+        }
+      ],
+      "budget": {
+        "queries": 2,
+        "response_size": "10KB",
+        "source": "default"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/orders",
+      "handler": "orders::create",
+      "location": "src/orders/mod.rs:29",
+      "body": "CreateOrder",
+      "status": 201,
+      "output": "OrderView",
+      "errors": [
+        {
+          "status": 422,
+          "code": "VAL0001"
+        }
+      ],
+      "budget": {
+        "queries": 2,
+        "response_size": "10KB",
+        "source": "default"
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/orders/{id}",
+      "handler": "orders::update",
+      "location": "src/orders/mod.rs:40",
+      "body": "UpdateOrder",
+      "status": 200,
+      "output": "OrderView",
+      "errors": [
+        {
+          "status": 404,
+          "code": "DB0042"
+        },
+        {
+          "status": 422,
+          "code": "VAL0001"
+        }
+      ],
+      "budget": {
+        "queries": 2,
+        "response_size": "10KB",
+        "source": "default"
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/orders/{id}",
+      "handler": "orders::delete",
+      "location": "src/orders/mod.rs:46",
+      "status": 204,
+      "errors": [
+        {
+          "status": 404,
+          "code": "DB0042"
+        }
+      ],
+      "budget": {
+        "queries": 2,
+        "response_size": "10KB",
+        "source": "default"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/orders/{id}/cancel",
+      "handler": "orders::cancel",
+      "location": "src/orders/mod.rs:52",
+      "status": 200,
+      "output": "OrderView",
+      "errors": [
+        {
+          "status": 404,
+          "code": "DB0042"
+        },
+        {
+          "status": 409,
+          "code": "ORD0001"
+        }
+      ],
+      "budget": {
+        "queries": 2,
+        "response_size": "10KB",
+        "source": "default"
+      }
+    }
   ],
   "signed_in": true,
   "owner_filter": "User",
   "inputs": [
-    { "name": "CreateOrder", "fields": [
-      { "name": "quantity", "type": "u32", "default": 1, "min": 1, "max": 100 },
-      { "name": "note", "type": "String", "optional": true, "max_length": 500, "rule_from": "model" }
-    ] },
-    { "name": "UpdateOrder", "patch": true, "fields": [
-      { "name": "quantity", "type": "u32", "min": 1, "max": 100 },
-      { "name": "note", "type": "String", "nullable": true, "max_length": 500, "rule_from": "model" }
-    ] },
-    { "name": "OrderFilters", "fields": [{ "name": "status", "type": "OrderStatus", "optional": true }] }
+    {
+      "name": "CreateOrder",
+      "fields": [
+        {
+          "name": "quantity",
+          "type": "u32",
+          "default": 1,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "name": "note",
+          "type": "String",
+          "optional": true,
+          "max_length": 500,
+          "rule_from": "model"
+        }
+      ]
+    },
+    {
+      "name": "UpdateOrder",
+      "fields": [
+        {
+          "name": "quantity",
+          "type": "Patch<u32>",
+          "min": 1,
+          "max": 100
+        },
+        {
+          "name": "note",
+          "type": "Patch<Option<String>>",
+          "max_length": 500,
+          "rule_from": "model"
+        }
+      ]
+    },
+    {
+      "name": "OrderFilters",
+      "fields": [
+        {
+          "name": "status",
+          "type": "OrderStatus",
+          "optional": true
+        }
+      ]
+    }
   ],
   "outputs": [
-    { "name": "OrderView", "fields": ["id", "quantity", "note", "status", "created_at"] }
+    {
+      "name": "OrderView",
+      "fields": [
+        "id",
+        "quantity",
+        "note",
+        "status",
+        "created_at"
+      ]
+    }
   ],
-  "errors": [{ "code": "ORD0001", "status": 409, "fix": "Only pending orders can be cancelled.", "raised_by": ["orders::cancel"] }],
-  "tests": { "file": "src/orders/tests.rs", "count": 4, "generated": ["CreateOrder", "UpdateOrder"] },
-  "front_end_pages": ["OrderList", "OrderDetail", "OrderForm"],
+  "errors": [
+    {
+      "code": "ORD0001",
+      "status": 409,
+      "fix": "Only pending orders can be cancelled.",
+      "raised_by": [
+        "orders::cancel"
+      ]
+    }
+  ],
+  "tests": {
+    "file": "src/orders/tests.rs",
+    "count": 4,
+    "generated": [
+      "CreateOrder",
+      "UpdateOrder"
+    ]
+  },
+  "front_end_pages": [
+    "OrderList",
+    "OrderDetail",
+    "OrderForm"
+  ],
   "client": "frontend/src/balise/orders.ts"
 }

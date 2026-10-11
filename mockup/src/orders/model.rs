@@ -2,16 +2,15 @@
 
 use balise::prelude::*;
 
-use crate::users::{User, UserId};
+use crate::users::User;
 
 #[derive(Model)]
 #[model(owned_by = User, expected_rows = "1M")]
-#[index(user_id, created_at)]
+#[index(user, created_at)]
 pub struct Order {
     pub id: OrderId,
-    #[field(references = User)]
-    pub user_id: UserId,
-    #[field(default = 1, check = "quantity > 0")]
+    pub user: BelongsTo<User>,
+    #[field(check = "quantity > 0")]
     pub quantity: u32,
     #[field(max_length = 500)]
     pub note: Option<String>,

@@ -153,33 +153,33 @@ error CMP0201  This query on Order does not say which user's rows it reads
 
       fix: Add `user: CurrentUser` to the parameters of `list`, then `.owned_by(&user)`
            right after `Order::query()`: the query returns only this user's orders.
-           A screen that needs every order uses `.all_owners("reason")`, which needs human approval.
+           A screen that needs every order uses `.all_owners("reason")`, a sensitive decision.
       more: balise explain CMP0201
 
 ✗ 1 error · 0 new warnings · 2 known findings (balise audit)
 ```
 
-`balise check --hook` prints the same text on stderr with exit code 2, plus one line asking to fix before going on; `balise check --format json` gives the same data to tools and MCP.
+`balise check --hook`, after each edit, prints a short form on stderr with exit code 2: the number of errors and the first three, with "finish your change, then fix"; `balise check --format json` gives the same data to tools and MCP.
 4. **Generated lints.** The generated `Cargo.toml` turns `deprecated` and `clippy::await_holding_lock` into errors. `balise check` also rejects `static mut`, global mutable state, `std::sync::Mutex`, `RefCell`, `tokio::spawn` and `println!` in application code.
 
 ### Hallucination traps
 
-Agents often write names they know from other frameworks (Axum's `Json`, Django's `objects.filter`, Laravel's `response()->json`). For the most frequent ones, Balise defines a hidden method whose trait bound can never be satisfied:
+Agents often write names they know from other frameworks (Axum's `Json`, Django's `objects.filter`, Laravel's `response()->json`, Rails' `save`). Two mechanisms catch them:
 
-```rust
-#[diagnostic::on_unimplemented(
-    message = "Balise has no `json()` on responses: return the Output type directly",
-    note = "see `balise explain CMP0107`"
-)]
-trait UseOutputType {}
+- **`balise check` rewrites the compiler's errors.** rustc reports an unknown method or type as E0599 or E0412, with no room for a custom message. `balise check` reads its JSON output, recognizes the names in its list of traps, and replaces the error with a Balise one: where the name comes from, and what to write instead, with an example.
 
-impl OrderView {
-    #[doc(hidden)]
-    pub fn json(self) where Self: UseOutputType { unreachable!() }
-}
-```
+  ```
+  error CMP0107  Balise has no `save()`: it comes from Active Record frameworks
+        at src/orders/mod.rs:42 in orders::cancel
+        fix: Change fields with `order.update(db, |o| o.status = OrderStatus::Cancelled).await?`:
+             only the fields that changed are written.
+        more: balise explain CMP0107
+  ```
 
-The code never compiles, so the hallucinated name cannot become a second API, and the error comes from the compiler itself: it shows up in `cargo check` and in the editor, even without `balise check`. The list of traps is built from agent evaluations ([agent-experience.md](agent-experience.md#evaluating-the-agent-experience)).
+- The same rewriting covers predictable mistakes on Balise's own types: `NewOrder { status: OrderStatus::Paid, … }` gives rustc's E0560 ("no field `status`"), rewritten as "`status` has a default: use `.with_status(OrderStatus::Paid)`".
+- **`#[diagnostic::on_unimplemented]`**, stable in Rust, for a few targeted cases where a trait bound is involved: a handler parameter or return type Balise does not accept, a model returned from a handler. Those messages show up in `cargo check` and in the editor too.
+
+The list of traps is built from agent evaluations ([agent-experience.md](agent-experience.md#evaluating-the-agent-experience)) and feeds `search_api`.
 
 ## Production findings
 
@@ -213,3 +213,10 @@ The report holds fingerprints and query shapes only, never query values, and the
 ## Panics and crashes
 
 A panic in a handler becomes a `500` with an error event. Crashes that cannot be caught produce a crash report with application frames first and framework frames folded. Details: [engine.md](engine.md#panics-and-supervision).
+
+## Open questions
+
+From the review of the mock-up by agents (2026-10-11):
+
+- **`cause` kept in full can leak personal data**: a driver error quotes the row's values (a unique violation repeats the email). The redaction rules must apply to causes too.
+- **Secrets in request logs**: the password reset token travels in a URL (`?token=…`) and lands in request lines. Query parameters named `token`, `code` or `secret` must be redacted like body fields.

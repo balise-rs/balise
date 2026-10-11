@@ -3,13 +3,31 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
-        "hooks": [{ "type": "command", "command": "balise check --hook" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "balise check --hook"
+          }
+        ]
       }
     ],
     "Stop": [
       {
-        "hooks": [{ "type": "command", "command": "balise audit --hook" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "balise audit --hook"
+          }
+        ]
       }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Edit(.balise/policy.toml)",
+      "Write(.balise/policy.toml)",
+      "Edit(.balise/approvals.toml)",
+      "Write(.balise/approvals.toml)"
     ]
   }
 }

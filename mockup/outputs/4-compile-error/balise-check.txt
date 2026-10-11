@@ -7,7 +7,7 @@ error CMP0201  This query on Order does not say which user's rows it reads
 
       fix: Add `user: CurrentUser` to the parameters of `list`, then `.owned_by(&user)`
            right after `Order::query()`: the query returns only this user's orders.
-           A screen that needs every order uses `.all_owners("reason")`, which needs human approval.
+           A screen that needs every order uses `.all_owners("reason")`, a sensitive decision.
       more: balise explain CMP0201
 
 ✗ 1 error · 0 new warnings · 2 known findings (balise audit)

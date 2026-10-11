@@ -1,0 +1,11 @@
+# Who takes each sensitive decision: "human" or "agent".
+# Change it only with `balise policy set <type> human|agent` (needs a terminal).
+# Preset: autonomous.
+
+budget = "agent"
+accept = "agent"
+unbounded = "agent"
+dependency = "agent"
+all_owners = "human"
+raw_unscoped = "human"
+breaking_migration = "human"

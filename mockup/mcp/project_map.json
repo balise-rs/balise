@@ -9,6 +9,7 @@
   "database": "postgres",
   "front_end": "react",
   "api_prefix": "/api",
+  "stale_since": null,
   "routes": [
     {
       "resource": "auth",
@@ -129,7 +130,7 @@
       "expected_rows": "1M",
       "fields": [
         "id",
-        "user_id",
+        "user",
         "quantity",
         "note",
         "status",

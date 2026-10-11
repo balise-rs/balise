@@ -8,10 +8,13 @@ publish = false
 # Optional modules, all enabled by `balise new` unless refused (`--no-orm`, `--no-auth`, `--no-mail`).
 balise = { version = "0.1", features = ["orm", "auth", "mail"] }
 
-# Enabled by `balise dev` and `balise test`. A release build never has them.
+# Enabled by `balise dev`. A release build never has it.
 [features]
 dev = ["balise/dev"]
-test = ["balise/test"]
+
+# Test tooling (TestApp, factories) for `cargo test` and `balise test` only.
+[dev-dependencies]
+balise = { version = "0.1", features = ["orm", "auth", "mail", "test"] }
 
 [lints.rust]
 deprecated = "deny"

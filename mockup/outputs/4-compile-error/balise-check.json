@@ -8,7 +8,7 @@
       "handler": "orders::list",
       "location": "src/orders/mod.rs:15",
       "span": { "start": "15:21", "end": "15:35", "label": "Order is owned by User" },
-      "fix": "Add `user: CurrentUser` to the parameters of `list`, then `.owned_by(&user)` right after `Order::query()`: the query returns only this user's orders. A screen that needs every order uses `.all_owners(\"reason\")`, which needs human approval.",
+      "fix": "Add `user: CurrentUser` to the parameters of `list`, then `.owned_by(&user)` right after `Order::query()`: the query returns only this user's orders. A screen that needs every order uses `.all_owners(\"reason\")`, a sensitive decision.",
       "rustc": "E0277"
     }
   ],

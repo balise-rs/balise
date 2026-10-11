@@ -1,4 +1,4 @@
-# Dependency safety. Loosening any of these needs human approval: `balise check` flags it.
+# Dependency safety. Loosening any of these is a sensitive decision (see .balise/policy.toml).
 
 # A version is installable only 7 days after its release (in minutes).
 minimumReleaseAge: 10080

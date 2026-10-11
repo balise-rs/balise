@@ -5,7 +5,8 @@
 #   balise routes            (or the `project_map` MCP tool)
 #   balise explain budgets   (how defaults are chosen)
 #
-# Raising a budget needs human approval: `balise check` flags every increase.
+# Lowering a value is free. Raising one is a sensitive decision: see .balise/policy.toml.
+# Every request made in a test checks its route's budget.
 #
 # Example override:
 # ["orders::list"]

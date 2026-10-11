@@ -43,7 +43,7 @@ Profiles:
  
 - `base` (default): core, engine, realtime, TypeScript generation.
 - `full`: `base` plus every optional module.
-- `dev`: enabled by `balise dev` and in debug builds. Never present in release builds.
+- `dev`: enabled by `balise dev`, which builds with `--features dev`. A plain `cargo build` does not have it, and release builds never do. `test` is enabled the same way by `balise test`.
 Rules:
  
 - The core and the facade assume `base` is present and never assume an optional module.
@@ -129,7 +129,9 @@ Handlers are monomorphized up to extraction, then type-erased behind one boxed i
 - Request-scoped values (parameters, connection, transaction) are dropped at the end of the request.
 - Process-scoped values (config, pool, state) live until shutdown. The framework wraps them in `Arc`; mutable state uses `Shared<T>`, backed by an async lock that is not poisoned by a panic.
 - `balise::blocking` runs CPU-heavy work on Tokio's blocking pool. Work cannot be moved off the event loop automatically: in dev, Balise detects tasks that hold the event loop for more than 10 ms and reports the handler.
-- `balise::spawn` runs background tasks and logs their failures.
+- `balise::spawn` runs background tasks and logs their failures. The task gets its own `Db`, with the same transaction rules as a request ([data.md](data.md#side-effects-after-commit)).
+- **A handler runs to the end even if the client disconnects**: hyper drops the future on disconnection, so Balise runs each handler in its own task, and only the response is discarded.
+- **A route's timeout cancels the handler.** A timeout is a cancellation: the transaction rolls back, but external calls already sent are not undone. Without that, the timeout would protect from nothing.
 ## Errors
  
 - One error type, `balise::Error`, carries an HTTP status, a stable code, a message, and the original cause.
@@ -186,6 +188,10 @@ Compiled only in dev builds. A binary built with `dev` refuses to start with `BA
 - Detailed error pages.
 - Proxy to the Vite dev server ([web.md](web.md)).
 ## Open questions
+
+From the review of the mock-up by agents (2026-10-11):
+
+- **Uploads before authentication**: a multipart body (up to the route's declared size, 5 GB in the example) is streamed to disk before `CurrentUser` is checked, so anyone can fill the disk. Extractors that reject cheaply (authentication, path, query) must run before the body is read.
  
 - Middleware: build on Tower internally or write a small in-house model. Recorded in the log of alternatives ([alternatives.md](alternatives.md)).
 - Handler execution: multi-threaded runtime (futures must be `Send`) or `spawn_local` on a runtime per core (no `Send` requirement). Also in the log of alternatives.

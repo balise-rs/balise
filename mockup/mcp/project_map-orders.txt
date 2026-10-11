@@ -1,27 +1,27 @@
 orders · src/orders/ · 6 routes · front end: frontend/src/pages/orders/
 
-Model Order · src/orders/model.rs · table orders · owned by User (user_id) · ~1M rows
+Model Order · src/orders/model.rs · table orders · owned by User (user) · ~1M rows
   id          OrderId, shown as ord_…
-  user_id     UserId → User, on delete restrict
-  quantity    u32, default 1, check quantity > 0
+  user        BelongsTo<User>, column user_id, on delete restrict
+  quantity    u32, check quantity > 0
   note        String?, max 500 characters
   status      OrderStatus (pending | cancelled), default pending
   created_at  DateTime
   updated_at  DateTime
-  index (user_id, created_at)
+  index (user, created_at)
 
 Routes · src/orders/mod.rs · every route needs a signed-in user (401) and reads only that user's orders
   GET    /orders              list    :13  query OrderFilters + PageParams → 200 Page<OrderView>, cursor, 20 per page (max 100)
   GET    /orders/{id}         get     :24  → 200 OrderView · 404 DB0042
   POST   /orders              create  :29  body CreateOrder → 201 OrderView · 422 VAL0001
-  PATCH  /orders/{id}         update  :35  body UpdateOrder → 200 OrderView · 404 DB0042 · 422 VAL0001
-  DELETE /orders/{id}         delete  :41  → 204 · 404 DB0042
-  POST   /orders/{id}/cancel  cancel  :47  → 200 OrderView · 404 DB0042 · 409 ORD0001
+  PATCH  /orders/{id}         update  :40  body UpdateOrder → 200 OrderView · 404 DB0042 · 422 VAL0001
+  DELETE /orders/{id}         delete  :46  → 204 · 404 DB0042
+  POST   /orders/{id}/cancel  cancel  :52  → 200 OrderView · 404 DB0042 · 409 ORD0001
   budgets: defaults (list 2 queries, 100 KB; others 2 queries, 10 KB), no override
 
 Inputs · src/orders/api.rs
   CreateOrder   quantity: u32 = 1, 1..=100 · note: String?, max 500 (from the model)
-  UpdateOrder   patch: every field optional, null clears note · quantity: 1..=100 · note: max 500 (from the model)
+  UpdateOrder   every field Patch<…>: absent unchanged, null clears note · quantity: 1..=100 · note: max 500 (from the model)
   OrderFilters  status: OrderStatus?
 
 Outputs · src/orders/api.rs

@@ -9,15 +9,15 @@ use balise::auth::{Password, ResetToken, Session};
 use balise::mail::{Mail, Mailer};
 use balise::prelude::*;
 
-use crate::users::User;
+use crate::users::{NewUser, User};
 use api::{CurrentUserView, RequestPasswordReset, ResetPassword, SignIn, SignUp};
 
 #[post("/auth/sign-up")]
 async fn sign_up(input: Body<SignUp>, session: Session, db: Db) -> Result<Created<CurrentUserView>> {
     let input = input.into_inner();
-    let user = User::create(db, |u| {
-        u.email = input.email;
-        u.password_hash = Password::hash(&input.password);
+    let user = User::create(db, NewUser {
+        email: input.email,
+        password_hash: Password::hash(&input.password),
     })
     .await?;
     session.sign_in(&user).await?;
@@ -60,7 +60,7 @@ async fn request_password_reset(input: Body<RequestPasswordReset>, mailer: Maile
 #[post("/auth/password-reset/confirm")]
 async fn reset_password(input: Body<ResetPassword>, db: Db) -> Result<NoContent> {
     let user_id = ResetToken::consume(db, &input.token).await?;
-    let user = User::get(db, user_id).await?;
+    let user = User::get(db, user_id).for_update().await?;
     user.update(db, |u| u.password_hash = Password::hash(&input.password)).await?;
     Ok(NoContent)
 }
