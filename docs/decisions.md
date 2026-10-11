@@ -51,3 +51,5 @@ Decisions taken while building Balise, with their reason. Most recent last. Opti
 | 2026-10-11 | `balise remove resource <name>`, symmetric to `generate`; the example resource teaches it, and removing the example suggests `balise generate` | Removing the example takes one command instead of hunting it across back end, front end, seeds and migrations |
 | 2026-10-11 | Seeds stay central and front routes stay in `App.tsx` | Collecting them per resource would add mechanisms for little gain; `balise remove` handles the cleanup |
 | 2026-10-11 | `balise new --no-example` | For those who already know what they want |
+| 2026-10-11 | The reference project is generated from the mock-up's `orders`, copied and renamed per resource, rather than from a separate template | One source: the reference project follows the mock-up automatically |
+| 2026-10-11 | Reference project: 8 resources plus `users` and `auth` (54 routes, 9 models), without realtime for now | A realistic routes-to-models ratio without a second template to maintain; realtime is added once the mock-up has a channel |

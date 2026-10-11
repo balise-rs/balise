@@ -29,8 +29,7 @@ Done !
 Done !
 
 ### 2.3 Reference project generator
-Turn the mock-up resource into a template, and write the script that generates the reference project from it (about 50 routes, 15 models). It does not compile yet; it is the target the core must make compile, and it changes whenever the mock-up does.
-- More: [compilation.md](compilation.md#benchmark)
+Done !
 
 ### 2.4 Error in the logs and `balise check` output
 Write the exact terminal and JSON output for a runtime error, a performance warning and an enriched compile error. They must be readable by a human and actionable by an agent.

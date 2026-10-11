@@ -74,5 +74,5 @@ jobs:
       - name: Measure compile times
         run: |
           cargo build --release -p compile-bench
-          target/release/compile-bench bench/placeholder \
+          target/release/compile-bench measure bench/placeholder \
             --baseline bench-results/last.txt --out bench-results/last.txt
