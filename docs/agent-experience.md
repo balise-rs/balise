@@ -85,7 +85,11 @@ The agent is configured with one command, whatever the setup:
 | `generate` | yes, after confirmation | |
 | `migrate` | yes, after confirmation | |
 
-Every tool returns structured JSON plus a short text summary.
+Every tool answers in two parts: `content`, compact text written for a model (what the agent reads), and `structuredContent`, the same data as JSON for programs. Text is 1.5 to 2 times smaller than the same data in JSON.
+
+- **`project_map` has two levels.** Without argument, one line per route and per model, about 2,000 tokens for a project of 50 routes; beyond about 3,000 tokens, one line per resource (`orders: 6 routes, model Order`). It also lists what modules add for the agent (the `mails` tool, the `/_balise/mails` page). With `resource`, the details of one resource: fields and rules, owner, budgets with their origin, possible errors, tests, front-end pages. Every item points to a file and a line.
+- **`explain` takes a code or a topic**: `explain(code: "DB0042")`, `explain(topic: "budgets")`. Topics cover what an error code does not: pagination, responses, writes, budgets, configuration. They live in the same registry as codes, one file per topic.
+- **`search_api` answers invented names**: it says the name does not exist in Balise, which framework it comes from, and what to write instead, with an example. A search with no result says so, and suggests related names.
 
 `search_api` searches an index built from Balise's source at release time. It also knows the names agents commonly invent (from the hallucination traps) and maps them to the right API.
 

@@ -1,0 +1,7 @@
+No result for "cache_page" in Balise 0.1.0.
+
+Balise has no response cache. Related:
+- State<T>: data that lives as long as the process, declared in main.rs (a cache you manage)
+- Shared<T>: the same, when it changes: .read().await, .write().await
+
+Search by what you want to do, such as "share data between requests".

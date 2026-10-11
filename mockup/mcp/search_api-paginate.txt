@@ -1,0 +1,17 @@
+4 results for "paginate" in Balise 0.1.0
+
+1. Page<T>: return type of a paginated list, cursor pagination by default
+     async fn list(page: Query<PageParams>, user: CurrentUser, db: Db) -> Result<Page<OrderView>> {
+         Ok(Order::query().owned_by(&user).page(db, page).await?.into())
+     }
+   200 with { items, next_cursor, prev_cursor, has_more } · 20 per page, 100 at most (balise.toml)
+
+2. Query<PageParams>: the page requested by the client (cursor, per_page)
+
+3. .page_numbered(db, page): numbered pages with a total, for admin screens; costly on large tables
+     Order::query().all_owners("admin list").page_numbered(db, page).await?
+
+4. Page::map(f): convert each row when the view needs more than the row; keeps the cursor
+     orders.map(|order| OrderView::with_price(order, prices.get(order.product_code)))
+
+more: explain("pagination")

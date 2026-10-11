@@ -1,0 +1,13 @@
+DB0042  Query returned no row
+
+message: No {model} with id {id}
+fix: Use an id that exists. If a missing row is expected, use `{model}::find`, which returns an Option.
+
+A query that must return a row found none: `get`, `.one()`, or a row hidden by its owner.
+The response is a 404 with this code. For a row owned by another user, the response is
+the same as for a row that does not exist, so its existence is not revealed; the server
+log says which case it was.
+
+When a missing row is a normal case (an optional setting, a lookup), use `find`:
+
+    let order = Order::find(db, id).owned_by(&user).await?;   // Option<Order>

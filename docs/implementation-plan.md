@@ -35,8 +35,7 @@ Done !
 Done !
 
 ### 2.5 MCP response
-Write what `project_map`, `search_api` and `explain` return for the mock-up project. This fixes the shape of the MCP data before implementation.
-- More: [agent-experience.md](agent-experience.md#mcp)
+Done !
 
 ### 2.6 Review by agents
 Give the mock-up to independent agents with a task, and to reviewers asked for bad ideas. Adjust the design documents with what they find before writing framework code.

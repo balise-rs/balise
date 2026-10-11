@@ -1,0 +1,7 @@
+Balise has no `save()`. It comes from Active Record frameworks (Rails, Django, Laravel).
+
+- To insert: Order::create(db, input), or Order::create(db, |o| …)
+- To update: order.update(db, input), or order.update(db, |o| o.status = OrderStatus::Cancelled)
+  Only the fields that changed are written.
+
+more: explain("writes")

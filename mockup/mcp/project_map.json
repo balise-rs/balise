@@ -1,0 +1,174 @@
+{
+  "project": "shop",
+  "balise": "0.1.0",
+  "modules": [
+    "orm",
+    "auth",
+    "mail"
+  ],
+  "database": "postgres",
+  "front_end": "react",
+  "api_prefix": "/api",
+  "routes": [
+    {
+      "resource": "auth",
+      "method": "POST",
+      "path": "/auth/sign-up",
+      "handler": "auth::sign_up",
+      "input": "SignUp",
+      "status": 201,
+      "output": "CurrentUserView",
+      "signed_in": false
+    },
+    {
+      "resource": "auth",
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "handler": "auth::sign_in",
+      "input": "SignIn",
+      "status": 200,
+      "output": "CurrentUserView",
+      "signed_in": false
+    },
+    {
+      "resource": "auth",
+      "method": "POST",
+      "path": "/auth/sign-out",
+      "handler": "auth::sign_out",
+      "status": 204,
+      "signed_in": false
+    },
+    {
+      "resource": "auth",
+      "method": "GET",
+      "path": "/auth/me",
+      "handler": "auth::me",
+      "status": 200,
+      "output": "CurrentUserView",
+      "signed_in": true
+    },
+    {
+      "resource": "auth",
+      "method": "POST",
+      "path": "/auth/password-reset",
+      "handler": "auth::request_password_reset",
+      "input": "RequestPasswordReset",
+      "status": 204,
+      "signed_in": false
+    },
+    {
+      "resource": "auth",
+      "method": "POST",
+      "path": "/auth/password-reset/confirm",
+      "handler": "auth::reset_password",
+      "input": "ResetPassword",
+      "status": 204,
+      "signed_in": false
+    },
+    {
+      "resource": "orders",
+      "method": "GET",
+      "path": "/orders",
+      "handler": "orders::list",
+      "query": "OrderFilters",
+      "status": 200,
+      "output": "Page<OrderView>",
+      "signed_in": true
+    },
+    {
+      "resource": "orders",
+      "method": "GET",
+      "path": "/orders/{id}",
+      "handler": "orders::get",
+      "status": 200,
+      "output": "OrderView",
+      "signed_in": true
+    },
+    {
+      "resource": "orders",
+      "method": "POST",
+      "path": "/orders",
+      "handler": "orders::create",
+      "input": "CreateOrder",
+      "status": 201,
+      "output": "OrderView",
+      "signed_in": true
+    },
+    {
+      "resource": "orders",
+      "method": "PATCH",
+      "path": "/orders/{id}",
+      "handler": "orders::update",
+      "input": "UpdateOrder",
+      "status": 200,
+      "output": "OrderView",
+      "signed_in": true
+    },
+    {
+      "resource": "orders",
+      "method": "DELETE",
+      "path": "/orders/{id}",
+      "handler": "orders::delete",
+      "status": 204,
+      "signed_in": true
+    },
+    {
+      "resource": "orders",
+      "method": "POST",
+      "path": "/orders/{id}/cancel",
+      "handler": "orders::cancel",
+      "status": 200,
+      "output": "OrderView",
+      "signed_in": true
+    }
+  ],
+  "models": [
+    {
+      "name": "Order",
+      "owned_by": "User",
+      "expected_rows": "1M",
+      "fields": [
+        "id",
+        "user_id",
+        "quantity",
+        "note",
+        "status",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "User",
+      "fields": [
+        "id",
+        "email",
+        "password_hash",
+        "created_at",
+        "updated_at"
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "OrderStatus",
+      "values": [
+        "pending",
+        "cancelled"
+      ]
+    }
+  ],
+  "seeds": [
+    "dev"
+  ],
+  "from_modules": [
+    {
+      "module": "mail",
+      "mcp_tools": [
+        "mails"
+      ],
+      "pages": [
+        "/_balise/mails"
+      ]
+    }
+  ]
+}

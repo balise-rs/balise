@@ -1,0 +1,11 @@
+{
+  "query": "paginate",
+  "balise": "0.1.0",
+  "results": [
+    { "name": "Page<T>", "kind": "type", "summary": "Return type of a paginated list, cursor pagination by default", "example": "async fn list(page: Query<PageParams>, user: CurrentUser, db: Db) -> Result<Page<OrderView>> {\n    Ok(Order::query().owned_by(&user).page(db, page).await?.into())\n}" },
+    { "name": "PageParams", "kind": "type", "summary": "The page requested by the client (cursor, per_page)", "usage": "Query<PageParams>" },
+    { "name": "page_numbered", "kind": "method", "on": "Query", "summary": "Numbered pages with a total, for admin screens; costly on large tables", "example": "Order::query().all_owners(\"admin list\").page_numbered(db, page).await?" },
+    { "name": "map", "kind": "method", "on": "Page", "summary": "Convert each row when the view needs more than the row; keeps the cursor", "example": "orders.map(|order| OrderView::with_price(order, prices.get(order.product_code)))" }
+  ],
+  "more": "pagination"
+}

@@ -99,7 +99,7 @@ Strict in dev, fail at startup in prod for what matters, never fail at runtime.
 ```json
 {
   "error": {
-    "code": "VAL0003",
+    "code": "VAL0001",
     "message": "Validation failed",
     "fields": { "contact": "must be an email" },
     "request_id": "req_7f3a2c"

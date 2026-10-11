@@ -1,0 +1,25 @@
+shop · Balise 0.1.0 · modules: orm (PostgreSQL), auth, mail · front end: React · API prefix: /api
+
+Routes (12)
+  auth    POST   /auth/sign-up                  sign_up                 SignUp → 201 CurrentUserView
+          POST   /auth/sign-in                  sign_in                 SignIn → CurrentUserView
+          POST   /auth/sign-out                 sign_out                → 204
+          GET    /auth/me                       me                      → CurrentUserView              signed in
+          POST   /auth/password-reset           request_password_reset  RequestPasswordReset → 204
+          POST   /auth/password-reset/confirm   reset_password          ResetPassword → 204
+  orders  GET    /orders                        list                    OrderFilters → Page<OrderView>  signed in
+          GET    /orders/{id}                   get                     → OrderView                    signed in
+          POST   /orders                        create                  CreateOrder → 201 OrderView    signed in
+          PATCH  /orders/{id}                   update                  UpdateOrder → OrderView        signed in
+          DELETE /orders/{id}                   delete                  → 204                          signed in
+          POST   /orders/{id}/cancel            cancel                  → OrderView                    signed in
+
+Models (2)
+  Order  owned by User, ~1M rows  id, user_id → User, quantity, note?, status: OrderStatus, created_at, updated_at
+  User                            id, email (unique), password_hash, created_at, updated_at
+
+Enums: OrderStatus = pending | cancelled
+Seeds: dev
+From modules: mails tool and /_balise/mails page (mail), captured mails in dev
+
+Details of a resource: project_map(resource: "orders")

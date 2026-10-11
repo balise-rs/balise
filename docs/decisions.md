@@ -66,3 +66,10 @@ Decisions taken while building Balise, with their reason. Most recent last. Opti
 | 2026-10-11 | Generators wrap what they add outside a resource's folders in `balise:<resource>` markers; `balise remove` deletes marked blocks, reports edited ones, refuses when another resource depends on it | Reliable removal without parsing TypeScript or Rust |
 | 2026-10-11 | `page.ids()`, `.index_by(key)` and `.group_by(key)` for bulk-loaded data that is not a relation | Cheap to provide; avoids a hand-written `HashMap` written ten ways. `.with()` stays the way for relations |
 | 2026-10-11 | Reference outputs are checked at three levels: renderer (byte for byte), end to end on the mock-up's routes (normalized), compile errors on a test project | Formatting alone does not prove that a real error has the right location, code and cause |
+| 2026-10-11 | MCP tools answer with compact text in `content` and the same data as JSON in `structuredContent` | The model reads the text; JSON costs 1.5 to 2 times more tokens for the same information |
+| 2026-10-11 | `project_map` has two levels: one line per route and model, or the details of one resource | The overview stays around 2,000 tokens for 50 routes; the agent reads details only where it works |
+| 2026-10-11 | `explain` takes a code or a topic (pagination, budgets…), topics declared in a registry like codes | Some questions have no error code; one tool, one registry |
+| 2026-10-11 | `explain` topics live in the error registry, one file per topic | One registry for everything `balise explain` shows |
+| 2026-10-11 | One validation code, `VAL0001`, with per-field details in `fields` | A 422 has one meaning; the fields say what is wrong |
+| 2026-10-11 | `project_map()` falls back to one line per resource beyond about 3,000 tokens | Keeps the overview cheap on large projects; details stay one call away |
+| 2026-10-11 | `project_map()` lists what modules add for the agent (tools, dev pages) | Otherwise the agent only learns about them from `AGENTS.md` |

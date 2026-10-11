@@ -1,0 +1,9 @@
+Balise has no `Json`. It comes from Axum, where it has two uses:
+
+1. Json<T> as a parameter, to read the body → Body<T>, with T an Input
+     async fn create(input: Body<CreateOrder>, user: CurrentUser, db: Db) -> Result<Created<OrderView>>
+
+2. Json(value) as a return value → return the Output type itself: responses are JSON already
+     async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView>
+
+more: explain("responses")
