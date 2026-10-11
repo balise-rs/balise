@@ -82,9 +82,13 @@ Strict in dev, fail at startup in prod for what matters, never fail at runtime.
 - At runtime, nothing in configuration can make a request fail: everything is validated once, at startup.
 ## Routing
  
-- Each route attribute (`#[get]`, `#[post]`…) registers the handler in a compile-time collection. There is no central router to maintain.
-- At startup, routes go into a radix tree that is never modified afterwards. The API prefix from configuration (`/api` by default) is added to every route then; route attributes never include it.
-- Startup fails if two handlers claim the same method and path, with an error naming both handlers.
+The router is Balise's own, entirely: its answers (`404`, `405`, `balise why`) are part of what the agent sees.
+
+- Each route attribute (`#[get]`, `#[post]`…) registers the handler in a compile-time collection. There is no central router to maintain. The collection is a static array filled by the linker (`linkme`), hidden behind Balise's own registry module: nothing runs before `main`, and the mechanism can be replaced without touching the macros or application code.
+- At startup, routes go into a tree of path segments that is never modified afterwards. The API base comes from configuration: `api.prefix` (`/api` by default), followed by `/v{api.version}` when a version is set. Route attributes never include it.
+- A static segment wins over a parameter: `/orders/new` is tried before `/orders/{id}`. When a path matches several routes, the first one in that order that accepts the method is chosen; when none does, the answer is `405` (`HTTP0009`) with an `Allow` header.
+- Paths are strict: `/orders/` is not `/orders`. Parameters are whole segments (`{id}`), percent-decoded.
+- Startup fails if two handlers claim the same method and path shape (`/orders/{id}` and `/orders/{order_id}` are the same), with `HTTP0010` naming both handlers and their locations.
 - The route macro also checks the handler's signature at compile time: unknown parameter type, two `Body` parameters, a `Path` count that does not match the route. Each case has its own error message.
 ## Handling a request
  

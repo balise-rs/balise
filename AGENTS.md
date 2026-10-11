@@ -19,6 +19,7 @@ crates/
   balise-dev/       MCP, instrumentation (feature `dev`, never in prod)
   balise-cli/       the `balise` binary, installed on the host
 bench/              compile-time benchmark
+tools/              repository tooling (release-age)
 docs/               architecture.md and one document per component
 ```
 

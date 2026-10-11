@@ -32,14 +32,17 @@ macro_rules! codes {
     };
 }
 
+mod cmp;
 mod ext;
 mod http;
 
+pub use cmp::*;
 pub use ext::*;
 pub use http::*;
 
 /// Every area, with its prefix and its codes.
-pub const AREAS: &[(&str, &[&ErrorCode])] = &[("EXT", ext::ALL), ("HTTP", http::ALL)];
+pub const AREAS: &[(&str, &[&ErrorCode])] =
+    &[("CMP", cmp::ALL), ("EXT", ext::ALL), ("HTTP", http::ALL)];
 
 /// A registered error code. Only the registry can create one.
 #[derive(Debug, PartialEq, Eq)]
@@ -85,6 +88,15 @@ impl ErrorCode {
             message = message.replace(&format!("{{{name}}}"), value);
         }
         message
+    }
+
+    /// The fix with its placeholders filled, like [`format_message`](Self::format_message).
+    pub fn format_fix(&self, args: &[(&str, &str)]) -> String {
+        let mut fix = self.fix.to_string();
+        for (name, value) in args {
+            fix = fix.replace(&format!("{{{name}}}"), value);
+        }
+        fix
     }
 
     /// The text printed by `balise explain`.

@@ -29,10 +29,11 @@ Option A is the one implemented first.
 | Recorded | Topic | Option A | Option B | Measured by | Status |
 | --- | --- | --- | --- | --- | --- |
 | 2026-10-10 | Handler execution | Multi-threaded Tokio runtime (futures must be `Send`) | `spawn_local` on a runtime per core (no `Send` requirement) | Agents ("not Send" errors), runtime | to test |
+| 2026-10-11 | API versions | One version at a time (`api.version`) | Several versions served side by side (`/api/v1` and `/api/v2`) | Agents, real needs | to test when a real case appears |
 | 2026-10-11 | HTTP versions | HTTP/1.1 only, until built-in TLS | HTTP/2 (and h2c) from the start | Compile (dependencies), runtime (behind a proxy) | to test |
 | 2026-10-10 | Middleware | Tower, internally | Small in-house model | Compile, runtime | to test |
 | 2026-10-10 | Handlers | Type erasure (`dyn`) after extraction | Fully monomorphized | Compile, runtime | to test |
-| 2026-10-10 | Route collection | Distributed slices (`linkme`) | Registration at startup (`inventory`) | Compile | to test |
+| 2026-10-10 | Route collection | Distributed slices (`linkme`), behind Balise's registry module | Registration at startup (`inventory`), or an in-house linker-section module | Compile, reliability across linkers | A implemented; to measure once the reference project compiles |
 
 ### Application API
 

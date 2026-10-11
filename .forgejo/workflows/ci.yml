@@ -50,6 +50,10 @@ jobs:
       - name: Feature combinations
         run: cargo hack check --feature-powerset --depth 2
 
+      # A signal, never a failure: lists versions younger than 7 days with the command to pin them.
+      - name: Release age (report only)
+        run: cargo run -q -p release-age -- Cargo.lock bench/placeholder/Cargo.lock
+
   compile-bench:
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

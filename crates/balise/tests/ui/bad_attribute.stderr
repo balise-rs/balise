@@ -1,0 +1,7 @@
+error: CMP0005: Invalid route attribute: the path must be a string literal
+         fix: Write the attribute with the path as a string: `#[get("/orders/{id}")]`.
+         more: balise explain CMP0005
+ --> tests/ui/bad_attribute.rs:6:15
+  |
+6 | #[balise::get(orders)]
+  |               ^^^^^^

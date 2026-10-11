@@ -91,4 +91,26 @@ connections keeps growing while traffic does not, something keeps connections op
 that never closes them, or a handler that never finishes.
 "#,
     }
+    HTTP0009 {
+        title: "Method not allowed",
+        message: "{method} is not allowed on {path}; allowed: {allowed}",
+        fix: "Use one of the allowed methods, or add a route for this method.",
+        explanation: r#"
+A route matches this path, but not with this method, so Balise answered `405` with an
+`Allow` header listing the methods the path accepts.
+
+A common cause is a form or a client sending `POST` where the route expects `PUT` or `PATCH`.
+`balise routes` lists every route with its method.
+"#,
+    }
+    HTTP0010 {
+        title: "Duplicate route",
+        message: "Two handlers for {method} {path}: {first} and {second}",
+        fix: "Keep one of the two handlers, or change the path or the method of one of them.",
+        explanation: r#"
+Two handlers declare the same method and the same path, so Balise cannot choose and the app
+does not start. Paths are compared by shape: `/orders/{id}` and `/orders/{order_id}` are the
+same route.
+"#,
+    }
 }

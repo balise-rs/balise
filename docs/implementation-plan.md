@@ -43,14 +43,10 @@ Done !
 ## 3. Core
 
 ### 3.1 Engine wrapper
-Start the server on hyper and Tokio through `balise::run()`, without exposing either. Capture their events and errors in Balise's format.
-- More: [engine.md](engine.md#startup)
+Done !
 
 ### 3.2 Routing and route collection
-Implement the route attributes, compile-time collection and the radix tree built at startup. Detect duplicate routes and check handler signatures in the macro.
-- More: [engine.md](engine.md#routing)
-- To decide: `linkme` or `inventory` ([alternatives.md](alternatives.md))
-- To decide: where nested routes live and how their handlers are named ([application.md](application.md#open-questions))
+Done !
 
 ### 3.3 Extractors, validation, Input and Output
 Implement `Path`, `Query`, `Body`, `State`, `RequestId` and the `Input` / `Output` derives with their validation attributes. Validation errors return a `422` with one message per field. As soon as routes and extractors compile, the reference project (or the part it can already build) joins the compile benchmark, and every later API change is measured.

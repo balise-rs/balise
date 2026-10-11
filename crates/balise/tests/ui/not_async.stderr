@@ -1,0 +1,7 @@
+error: CMP0001: `list` must be an `async fn` to be a handler
+         fix: Write `async fn list(…)`.
+         more: balise explain CMP0001
+ --> tests/ui/not_async.rs:7:1
+  |
+7 | fn list() {}
+  | ^^

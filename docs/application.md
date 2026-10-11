@@ -69,7 +69,8 @@ async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> 
  
 - Route attributes: `#[get]`, `#[post]`, `#[put]`, `#[patch]`, `#[delete]`.
 - Path parameters are written `{name}` and read with `Path<T>`, in the order they appear.
-- Paths never include the API prefix: `#[get("/orders")]` is served at `/api/orders` by default. The prefix, with its version if any (`/api/v1`), is set once in `balise.toml`.
+- Paths never include the API prefix: `#[get("/orders")]` is served at `/api/orders` by default. The prefix and an optional version are set once in `balise.toml` (`[api] prefix = "/api"`, `version = 1` for `/api/v1`).
+- A route lives in the resource of what it returns: `GET /shops/{shop_id}/orders` returns orders, so it goes in `orders/`. Its handler is named `<verb>_in_<parent>`: `list_in_shop`.
 - Every handler returns `Result<T>`, where `T` is a response type.
 - Handler names are short verbs; the folder gives the resource: `list`, `get`, `create`, `update`, `delete`, or a specific verb such as `cancel`. Logs, errors and MCP tools refer to a handler as `orders::create`.
 ### Parameters
@@ -304,4 +305,3 @@ Investigate through Balise, never in the framework's dependencies. Everything be
 From the review of the mock-up by agents (2026-10-11):
 
 - **Rust ownership leaks through extractors.** The mock-up uses five different forms: `*id`, a parameter passed as is, `&input.email`, `input.into_inner()`, and moving `filters.status` out. `.page(db, page)` receives a `Query<PageParams>` while the query method takes `PageParams`. One rule is needed, ideally with no `*`, `&` or `into_inner()` for the agent to choose.
-- **Nested routes.** Where `GET /shops/{shop_id}/orders` lives (in `orders/` or `shops/`) and how its handler is named (`list_in_shop`?) is undocumented: all three agents guessed.

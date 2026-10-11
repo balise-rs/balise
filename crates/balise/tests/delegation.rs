@@ -22,7 +22,16 @@ const DELEGATED: &[&str] = &[
 fn the_facade_does_not_depend_on_delegated_crates() {
     let manifest =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")).unwrap();
+    // Only what a project gets: test-only dependencies are fine.
+    let mut in_dependencies = false;
     for line in manifest.lines() {
+        if line.starts_with('[') {
+            in_dependencies = line.trim() == "[dependencies]";
+            continue;
+        }
+        if !in_dependencies {
+            continue;
+        }
         let name = line.split(['=', '.', ' ']).next().unwrap_or_default();
         assert!(
             !DELEGATED.contains(&name),

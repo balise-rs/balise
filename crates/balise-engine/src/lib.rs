@@ -6,12 +6,18 @@
 use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use balise_core::config::Config;
 use balise_core::error_codes::{
-    EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007, HTTP0008,
+    EXT0001, ErrorCode, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007,
+    HTTP0008, HTTP0009,
 };
 use balise_core::event::{Event, Level};
+use balise_core::handler::{self, Method};
+use balise_core::registry;
+use balise_core::router::{Match, Router};
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::body::Incoming;
@@ -21,18 +27,19 @@ use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-/// Where the app listens until configuration provides the address.
-pub const DEFAULT_ADDRESS: &str = "0.0.0.0:3000";
-
 /// How long to wait before accepting again when the process is out of file descriptors.
 const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 
 /// At most one report per period for the same accept error, with the number of occurrences.
 const REPORT_PERIOD: Duration = Duration::from_secs(1);
 
-/// Starts the runtime and serves on `address`. Never returns: on a fatal error, reports it
-/// and exits with a non-zero code.
-pub fn run(address: &str) -> ! {
+/// Builds the router from the registered routes, starts the runtime and serves. Never
+/// returns: on a fatal error, reports it and exits with a non-zero code.
+pub fn run(config: Config) -> ! {
+    let router = match Router::build(registry::routes(), &config.api_base()) {
+        Ok(router) => Arc::new(router),
+        Err(event) => fail(event),
+    };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -44,8 +51,8 @@ pub fn run(address: &str) -> ! {
         ),
     };
     runtime.block_on(async {
-        match bind(address).await {
-            Ok(listener) => serve(listener).await,
+        match bind(&config.address).await {
+            Ok(listener) => serve(listener, router).await,
             Err(event) => fail(event),
         }
     })
@@ -148,7 +155,7 @@ impl Throttle {
 
 /// Accepts connections forever. Each connection, and each request, runs in its own task:
 /// a client that disconnects does not cancel the handler.
-pub async fn serve(listener: TcpListener) -> ! {
+pub async fn serve(listener: TcpListener, router: Arc<Router>) -> ! {
     let mut throttle = Throttle {
         last_report: None,
         unreported: 0,
@@ -168,15 +175,19 @@ pub async fn serve(listener: TcpListener) -> ! {
                 continue;
             }
         };
+        let router = router.clone();
         tokio::spawn(async move {
-            let service = service_fn(|request| async move {
-                Ok::<_, Infallible>(match tokio::spawn(handle(request)).await {
-                    Ok(response) => response,
-                    // Panics become proper crash reports later; for now, a plain 500.
-                    Err(_) => {
-                        error_response(StatusCode::INTERNAL_SERVER_ERROR, EXT0001, "Internal error")
-                    }
-                })
+            let service = service_fn(move |request| {
+                let router = router.clone();
+                async move {
+                    Ok::<_, Infallible>(to_hyper(
+                        match tokio::spawn(handle(router, request)).await {
+                            Ok(response) => response,
+                            // Panics become proper crash reports later; for now, a plain 500.
+                            Err(_) => error_response(500, EXT0001, "Internal error"),
+                        },
+                    ))
+                }
             });
             if let Err(error) = http1::Builder::new()
                 .serve_connection(TokioIo::new(stream), service)
@@ -188,31 +199,66 @@ pub async fn serve(listener: TcpListener) -> ! {
     }
 }
 
-async fn handle(request: Request<Incoming>) -> Response<Full<Bytes>> {
-    let method = request.method().to_string();
-    let path = request.uri().path().to_string();
-    let message = HTTP0003.format_message(&[("method", &method), ("path", &path)]);
-    error_response(StatusCode::NOT_FOUND, HTTP0003, &message)
+async fn handle(router: Arc<Router>, request: Request<Incoming>) -> handler::Response {
+    let method = Method::parse(request.method().as_str());
+    let path = request.uri().path();
+    match router.find(method, path) {
+        Match::Found {
+            route,
+            params,
+            path,
+        } => {
+            let request = handler::Request {
+                method: route.method,
+                path,
+                params,
+            };
+            (route.invoke)(request).await
+        }
+        Match::MethodNotAllowed { allowed } => {
+            let allowed: Vec<&str> = allowed.iter().map(|m| m.as_str()).collect();
+            let allowed = allowed.join(", ");
+            let message = HTTP0009.format_message(&[
+                ("method", request.method().as_str()),
+                ("path", path),
+                ("allowed", &allowed),
+            ]);
+            let mut response = error_response(405, HTTP0009, &message);
+            response.headers.push(("allow", allowed));
+            response
+        }
+        Match::NotFound => {
+            let message =
+                HTTP0003.format_message(&[("method", request.method().as_str()), ("path", path)]);
+            error_response(404, HTTP0003, &message)
+        }
+    }
 }
 
 /// The single error body ([engine.md](docs/engine.md#response-format)).
-fn error_response(
-    status: StatusCode,
-    code: &balise_core::error_codes::ErrorCode,
-    message: &str,
-) -> Response<Full<Bytes>> {
-    let body = format!(
-        r#"{{"error":{{"code":"{}","message":"{}"}}}}"#,
-        code.code(),
-        json_escape(message)
-    );
-    let mut response = Response::new(Full::new(Bytes::from(body)));
-    *response.status_mut() = status;
-    response.headers_mut().insert(
-        hyper::header::CONTENT_TYPE,
-        hyper::header::HeaderValue::from_static("application/json"),
-    );
-    response
+fn error_response(status: u16, code: &ErrorCode, message: &str) -> handler::Response {
+    handler::Response::json(
+        status,
+        format!(
+            r#"{{"error":{{"code":"{}","message":"{}"}}}}"#,
+            code.code(),
+            json_escape(message)
+        ),
+    )
+}
+
+fn to_hyper(response: handler::Response) -> Response<Full<Bytes>> {
+    let mut hyper_response = Response::new(Full::new(Bytes::from(response.body)));
+    *hyper_response.status_mut() =
+        StatusCode::from_u16(response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    for (name, value) in response.headers {
+        if let Ok(value) = hyper::header::HeaderValue::from_str(&value) {
+            hyper_response
+                .headers_mut()
+                .insert(hyper::header::HeaderName::from_static(name), value);
+        }
+    }
+    hyper_response
 }
 
 /// Classifies a connection error: caused by the client (`debug`), or not recognized.

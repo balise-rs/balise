@@ -1,7 +1,10 @@
 //! The engine serves HTTP and reports its own errors with Balise codes.
 
 use balise_core::error_codes::HTTP0001;
+use std::sync::Arc;
+
 use balise_core::event::Level;
+use balise_core::router::Router;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -17,11 +20,12 @@ async fn request(address: std::net::SocketAddr, raw: &str) -> String {
 async fn unknown_route_answers_404_with_the_error_body() {
     let listener = balise_engine::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(balise_engine::serve(listener));
+    let router = Arc::new(Router::build(&[], "/api").unwrap());
+    tokio::spawn(balise_engine::serve(listener, router));
 
     let response = request(
         address,
-        "GET /orders HTTP/1.1\r\nHost: test\r\nConnection: close\r\n\r\n",
+        "GET /api/orders HTTP/1.1\r\nHost: test\r\nConnection: close\r\n\r\n",
     )
     .await;
 
@@ -34,7 +38,8 @@ async fn unknown_route_answers_404_with_the_error_body() {
         "{response}"
     );
     assert!(
-        response.ends_with(r#"{"error":{"code":"HTTP0003","message":"No route for GET /orders"}}"#),
+        response
+            .ends_with(r#"{"error":{"code":"HTTP0003","message":"No route for GET /api/orders"}}"#),
         "{response}"
     );
 }

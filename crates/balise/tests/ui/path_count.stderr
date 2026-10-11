@@ -1,0 +1,7 @@
+error: CMP0003: `get` does not read the path parameters of its route: `/shops/{shop_id}/orders/{id}` has 2, the handler reads 1
+         fix: Add one `Path<T>` per `{name}` in the route, in order, or one tuple: `Path<(A, B)>`.
+         more: balise explain CMP0003
+ --> tests/ui/path_count.rs:7:10
+  |
+7 | async fn get(_id: Path<u8>) {}
+  |          ^^^

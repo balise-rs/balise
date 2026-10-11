@@ -1,0 +1,7 @@
+error: CMP0002: `create` has 2 `Body` parameters; a request has one body
+         fix: Keep one `Body<T>` parameter, with every field in one `Input` struct.
+         more: balise explain CMP0002
+ --> tests/ui/two_bodies.rs:7:35
+  |
+7 | async fn create(_a: Body<u8>, _b: Body<u8>) {}
+  |                                   ^^^^

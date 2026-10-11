@@ -26,3 +26,9 @@ balise-orm = { workspace = true, optional = true }
 balise-auth = { workspace = true, optional = true }
 balise-mail = { workspace = true, optional = true }
 balise-dev = { workspace = true, optional = true }
+
+[dev-dependencies]
+balise-core.workspace = true
+balise-engine.workspace = true
+tokio = { workspace = true, features = ["macros", "io-util"] }
+trybuild.workspace = true

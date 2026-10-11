@@ -1,0 +1,7 @@
+error: CMP0004: Invalid route path `/orders/id-{id}`: `id-{id}`: a parameter is a whole segment, such as `{id}`
+         fix: Write a path that starts with `/`, with segments separated by `/` and parameters written `{name}`.
+         more: balise explain CMP0004
+ --> tests/ui/bad_path.rs:6:15
+  |
+6 | #[balise::get("/orders/id-{id}")]
+  |               ^^^^^^^^^^^^^^^^^
