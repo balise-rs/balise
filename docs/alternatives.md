@@ -52,6 +52,8 @@ Option A is the one implemented first.
 | 2026-10-10 | Primary keys | UUIDv7, typed and prefixed | Auto-incremented integer | Runtime (index size, insert and join speed) | to test |
 | 2026-10-10 | Transactions | Lazy transaction per request | Explicit transactions only | Runtime (cost, lock duration), agents (missing transactions) | to test |
 | 2026-10-11 | Ownership enforcement | Compile-time `.owned_by()` in the ORM | Also PostgreSQL row-level security policies generated from `owned_by`, as defense in depth | Runtime (query cost), agents (bypasses caught) | to test |
+| 2026-10-11 | Converting a page | Synchronous `.map(f)` only | `.try_map(f)` for fallible conversions | Agents (cases where a conversion can fail) | to test when a real case appears |
+| 2026-10-11 | Bounded queries on a page's ids | `.unbounded(reason)` when filtering on `page.ids()` | An `is_in` on a page's ids counts as bounded | Agents (`.unbounded()` noise), compile (cost of tracking the bound) | to test |
 | 2026-10-10 | Test isolation | Fresh database per test, copied from a template | Transaction rolled back after each test | Runtime (test suite duration) | to test |
 
 ### Agent experience

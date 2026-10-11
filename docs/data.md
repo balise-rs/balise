@@ -59,7 +59,7 @@ async fn get(id: Path<OrderId>, db: Db) -> Result<OrderView> {
 | `Order::get(db, id)` | the row, or an error that becomes a `404` |
 | `Order::find(db, id)` | `Option<Order>`, when a missing row is expected |
 | `Order::get_many(db, ids)` | several rows by id, in one query |
-| `Order::list(db, page)` | a `Page<Order>`; `.into()` turns it into a `Page<OrderView>` |
+| `Order::list(db, page)` | a `Page<Order>`; `.into()` turns it into a `Page<OrderView>`, `.map(f)` when the view needs more than the row |
 | `Order::query()` | filters, ordering, relations, then `.page(db, …)`, `.first(db)`… (see [Queries](#queries)) |
 | `Order::create(db, input)` | insert from an `Input`, or from a closure: `Order::create(db, \|o\| …)` |
 | `order.update(db, input)` | partial update from an `Input`, or from a closure |
@@ -474,6 +474,35 @@ Responses:
 - numbered: `{ items, page, per_page, total, total_pages }`.
 
 The generated client knows each route's mode and limits: infinite scroll for cursor routes, page controls for numbered ones ([web.md](web.md)).
+
+### Converting a page
+
+- `.into()` converts each row directly (`From<Order> for OrderView`). It is `.map(Into::into)`, shorter for the common case.
+- `.map(f)` is for a conversion that needs more than the row: a value from `State`, an aggregate loaded beforehand. It keeps the cursor and the page's metadata, computed on the rows, so the view does not need to carry the sort key.
+- **The closure is synchronous, on purpose.** It cannot `.await`, so it cannot run a query per row: the N+1 is impossible to write, rather than detected at runtime. An `.await` in it is a compile error, enriched by `balise check` with a code and the way to do it: load in bulk (`.with()` for relations), then map.
+
+```rust
+let orders = Order::query().owned_by(&user).page(db, page).await?;
+Ok(orders.map(|order| OrderView::with_price(order, prices.get(order.product_code))))
+```
+
+Data that is not a relation (an aggregate in raw SQL, a value from another service) is loaded in bulk with the page's ids, then indexed:
+
+- `page.ids()`: the typed ids of the page's rows, for an `is_in` or a raw query;
+- `.index_by(key)`: at most one value per key, `take(id)` gives an `Option`;
+- `.group_by(key)`: several values per key, `take(id)` gives a `Vec`, empty when absent.
+
+```rust
+let users = User::query().page(db, page).await?;
+let mut stats = db.sql::<UserStats>("SELECT user_id, COUNT(*) AS orders FROM orders WHERE user_id = ANY($1) GROUP BY user_id", (users.ids(),))
+    .await?
+    .index_by(|s| s.user_id);
+Ok(users.map(|user| UserView::new(user, stats.take(user.id))))
+```
+
+For relations, `.with()` stays the way: these helpers are for what has no foreign key.
+
+To settle with relations: reading a loaded relation returns a `Result` (`order.user.get()?`), which a synchronous closure cannot propagate. Options: a relation loaded by `.with()` changes type and is read without `Result`; a `try_map`; or loading driven by the `Output` ([experimental](#loading-driven-by-the-output-experimental)).
 
 ## Writes and transactions
 

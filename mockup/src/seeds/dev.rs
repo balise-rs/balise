@@ -2,7 +2,9 @@
 
 use balise::prelude::*;
 
+// balise:orders
 use crate::orders::Order;
+// /balise:orders
 use crate::users::User;
 
 #[balise::seed]
@@ -13,7 +15,9 @@ async fn dev(db: Db) -> Result<()> {
         .with_password("password")
         .create(db)
         .await?;
+    // balise:orders
     Order::fake().owned_by(&user).create_many(db, 25).await?;
     Order::fake().create_many(db, 10).await?;
+    // /balise:orders
     Ok(())
 }

@@ -32,8 +32,7 @@ Done !
 Done !
 
 ### 2.4 Error in the logs and `balise check` output
-Write the exact terminal and JSON output for a runtime error, a performance warning and an enriched compile error. They must be readable by a human and actionable by an agent.
-- More: [errors-and-logs.md](errors-and-logs.md#renderings)
+Done !
 
 ### 2.5 MCP response
 Write what `project_map`, `search_api` and `explain` return for the mock-up project. This fixes the shape of the MCP data before implementation.
@@ -60,11 +59,11 @@ Implement `Path`, `Query`, `Body`, `State`, `RequestId` and the `Input` / `Outpu
 - To decide: type erasure after extraction or full monomorphization ([alternatives.md](alternatives.md))
 
 ### 3.4 Response and error format
-Map return types to statuses (`Created`, `NoContent`, `Page`…) and errors to the single error body. Implement `#[derive(AppError)]`.
+Map return types to statuses (`Created`, `NoContent`, `Page`…) and errors to the single error body. Implement `#[derive(AppError)]`. The response files of `mockup/outputs/` are checked end to end on the mock-up's routes.
 - More: [engine.md](engine.md#response-format), [application.md](application.md#errors)
 
 ### 3.5 Logs and events
-Implement the event model, the dev and JSON renderings, the per-request summary and the redaction of sensitive data. Bridge `log` and capture dependency events.
+Implement the event model, the dev and JSON renderings, the per-request summary and the redaction of sensitive data. Bridge `log` and capture dependency events. Every case of `mockup/outputs/` passes at the renderer level and end to end.
 - More: [errors-and-logs.md](errors-and-logs.md#events)
 
 ### 3.6 Configuration and environments

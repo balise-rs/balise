@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "DB0042",
+    "message": "No Order with id ord_01JB8XQ5",
+    "location": "src/orders/mod.rs:26",
+    "fix": "Use an id from GET /api/orders. If a missing row is expected, use `Order::find`, which returns an Option.",
+    "request_id": "req_9b21e0"
+  }
+}

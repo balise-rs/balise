@@ -1,0 +1,8 @@
+14:05:12 WARN  PERF0001  N+1 queries: the same query ran 20 times in one request
+         at src/orders/mod.rs:60 in orders::latest, request req_4c8d11
+         query: SELECT … FROM users WHERE id = $1   × 20 · 38 ms in total
+         fix: Load the users with the orders: add `.with(|o| o.user)` to the query on line 52,
+              then build the views from `order.user`. 1 query instead of 20.
+         more: balise explain PERF0001
+14:05:12  GET /api/admin/orders/latest → request req_4c8d11 (orders::latest returned 200 in 52 ms with 21 queries, budget 2; warning PERF0001)
+14:05:19  GET /api/admin/orders/latest → request req_e3a90f (orders::latest returned 200 in 47 ms with 21 queries, budget 2; warning PERF0001)

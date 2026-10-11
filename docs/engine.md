@@ -107,7 +107,7 @@ Strict in dev, fail at startup in prod for what matters, never fail at runtime.
 }
 ```
  
-`fields` appears only for validation errors. In prod, `message` is generic for `5xx` errors.
+`fields` appears only for validation errors. In dev, the body adds `location`, `fix` and `cause`. In prod, a `5xx` keeps only a generic code (`HTTP0500`), a generic message and the request ID; a `4xx` keeps its code and message.
  
 Why a typed return rather than a response object built in the handler: the output type is known at compile time, so Balise can generate TypeScript types, check each route's shape, and describe it through MCP. A response object (`Response::ok(json)`) would hide the shape until runtime and open a second way to signal errors. Success or failure is carried by the HTTP status; the generated TypeScript client exposes it to the front end as `{ ok: true, data }` or `{ ok: false, error }`, so no envelope is needed on the wire.
  

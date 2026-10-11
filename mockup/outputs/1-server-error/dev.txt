@@ -1,0 +1,7 @@
+14:01:58  GET /api/orders → request req_51e07a (orders::list returned 200 in 4 ms with 1 query)
+14:02:11 ERROR DB0003  Cannot reach the database at db:5432
+         at src/orders/mod.rs:31 in orders::create, request req_7f3a2c
+         cause: connection refused (os error 111), 3 attempts in 5 s
+         fix: Check that the database is running (`balise dev` starts it) and that DATABASE_URL points to it.
+         more: balise explain DB0003
+14:02:11  POST /api/orders → request req_7f3a2c (orders::create returned 500 in 5004 ms with 0 queries)

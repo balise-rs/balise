@@ -1,0 +1,1 @@
+{"time":"2026-10-11T12:03:40.201Z","level":"info","message":"GET /api/orders/ord_01JB8XQ5 404","method":"GET","path":"/api/orders/ord_01JB8XQ5","status":404,"handler":"orders::get","duration_ms":3,"queries":1,"code":"DB0042","detail":"No Order with id ord_01JB8XQ5 for usr_01JB7K2M: it belongs to another user","location":"src/orders/mod.rs:26","request_id":"req_9b21e0"}

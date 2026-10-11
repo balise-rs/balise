@@ -117,6 +117,15 @@ Hooks call `balise check --hook` and `balise audit --hook`. In this mode the CLI
 
 - `balise generate resource orders` creates the folder, the handlers, the model, the tests, and the migration.
 - `balise remove resource orders` undoes it: the back-end and front-end folders, the `mod` line, the seeds and pages that use it, and the table, by rewriting draft migrations ([data.md](data.md#draft-migrations)). A module declared without its folder is reported by `balise check` with the exact fix.
+- To remove reliably without parsing TypeScript or Rust, generators wrap what they add outside the resource's folders in markers:
+
+  ```tsx
+  {/* balise:orders */}
+  <Route path="/orders" element={<OrderList />} />
+  {/* /balise:orders */}
+  ```
+
+  `remove` deletes the marked blocks and both folders, rewrites the draft migration, then runs `balise check`. A marked block that was moved or edited is reported with its file and line, never guessed. `remove` refuses when another resource depends on this one.
 - The example resource of a new project doubles as a tutorial: removing it is the first use of `balise remove`. When the resource removed is the example itself, Balise suggests the next step, `balise generate resource <name>`.
 - Generated code follows every convention and compiles as is. Generators write the `pub` that models, inputs and outputs need to be used from the handlers.
 - The agent fills in the generated skeleton rather than writing structure from memory.

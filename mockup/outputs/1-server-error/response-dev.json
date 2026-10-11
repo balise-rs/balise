@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "DB0003",
+    "message": "Cannot reach the database at db:5432",
+    "location": "src/orders/mod.rs:31",
+    "fix": "Check that the database is running (`balise dev` starts it) and that DATABASE_URL points to it.",
+    "cause": "connection refused (os error 111), 3 attempts in 5 s",
+    "request_id": "req_7f3a2c"
+  }
+}

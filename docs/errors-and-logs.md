@@ -66,9 +66,14 @@ Errors, warnings and ordinary logs are all events with the same fields:
 | `handler` | inside a request | e.g. `orders::create` |
 | `location` | errors and warnings | file and line in application code |
 | `fix` | errors and warnings | |
+| `cause` | errors with an original cause | the original error, in full |
 | other fields | no | structured key-value pairs |
 
-Each request produces one summary event when it ends: method, path, handler, status, duration, number of queries, request ID.
+Each request produces one summary event when it ends, at `info`: method, path, handler, status, duration, number of queries, request ID, and the codes of any error or warning.
+
+- **`5xx`**: the server failed. An `error` event with location, fix and cause, then the request's summary.
+- **`4xx`**: the client sent something wrong; the server did its job. No separate event: the summary carries the code, the detail and the location. A bot probing ids does not fill the logs with errors.
+- **Logs may say more than the response.** A `404` on another user's row says so in the logs; the response only says the row was not found.
 
 Application code logs through `balise::log` (`info!`, `warn!`…), which produces the same events. `println!` is flagged by `balise check`.
 
@@ -79,16 +84,31 @@ The format depends on the environment and can be overridden with `log.format` in
 Dev (terminal, colored):
 
 ```
-14:02:11 ERROR DB0042  No Order with id ord_01JB8XQ5
-         at src/orders/mod.rs:27 in orders::get
-         fix: Return Error::not_found, or use Order::find if a missing row is expected.
-         req_7f3a2c · balise explain DB0042
+14:01:58  GET /api/orders → request req_51e07a (orders::list returned 200 in 4 ms with 1 query)
+14:02:11 ERROR DB0003  Cannot reach the database at db:5432
+         at src/orders/mod.rs:31 in orders::create, request req_7f3a2c
+         cause: connection refused (os error 111), 3 attempts in 5 s
+         fix: Check that the database is running (`balise dev` starts it) and that DATABASE_URL points to it.
+         more: balise explain DB0003
+14:02:11  POST /api/orders → request req_7f3a2c (orders::create returned 500 in 5004 ms with 0 queries)
+14:03:40  GET /api/orders/ord_01JB8XQ5 → request req_9b21e0 (orders::get returned 404 in 3 ms with 1 query)
+          DB0042  No Order with id ord_01JB8XQ5 for usr_01JB7K2M: it belongs to another user
+          at src/orders/mod.rs:26 in orders::get
+          fix: Use an id from GET /api/orders. If a missing row is expected, use `Order::find`, which returns an Option.
+          more: balise explain DB0042
 ```
+
+- A request line reads as a sentence: path, request ID, then what the handler returned, how fast, with how many queries.
+- The request ID of an event is on its `at` line, so it can be matched to its request when requests interleave.
+- Every `fix:` line is followed by `more: balise explain CODE`. JSON lines carry the `code` field instead.
+
+Colors carry the level (red for errors and `5xx`, yellow for warnings and `4xx`, dim for `2xx`). With `NO_COLOR`, or when the output is not a terminal, the text is the same without them.
 
 Test and prod (one JSON object per line, on stdout):
 
 ```json
-{"time":"2026-10-10T12:02:11Z","level":"error","code":"DB0042","message":"No Order with id ord_01JB8XQ5","handler":"orders::get","location":"src/orders/mod.rs:27","request_id":"req_7f3a2c","fix":"Return Error::not_found, or use Order::find if a missing row is expected."}
+{"time":"2026-10-11T12:02:11.478Z","level":"error","code":"DB0003","message":"Cannot reach the database at db:5432","handler":"orders::create","location":"src/orders/mod.rs:31","fix":"Check that the database is running (`balise dev` starts it) and that DATABASE_URL points to it.","cause":"connection refused (os error 111), 3 attempts in 5 s","request_id":"req_7f3a2c"}
+{"time":"2026-10-11T12:02:11.479Z","level":"info","message":"POST /api/orders 500","method":"POST","path":"/api/orders","status":500,"handler":"orders::create","duration_ms":5004,"queries":0,"code":"DB0003","request_id":"req_7f3a2c"}
 ```
 
 ## Capturing other output
@@ -117,7 +137,27 @@ The agent meets most errors at compile time. Balise improves them at four levels
    - "future is not Send": the variable held across `.await` and how to fix it;
    - a resource folder whose module is not declared in `main.rs`: its routes are never compiled, so nothing else would report them missing;
    - a private field or type used from another module (E0616, E0603): the `pub` to add, and where;
-   - every diagnostic gets a `CMP` code and the same rendering as runtime errors.
+   - every diagnostic gets a `CMP` code and the same rendering as runtime errors;
+   - the location is where the fix goes, which is not always where rustc points: a query without an owner is reported at `Order::query()`, not at `.page()`;
+   - paths inside Balise or the registry are dropped, and the output ends with one summary line: errors, new warnings, known findings.
+
+```
+error CMP0201  This query on Order does not say which user's rows it reads
+      at src/orders/mod.rs:15 in orders::list
+
+         15 │     let mut query = Order::query()
+            │                     ^^^^^^^^^^^^^^ Order is owned by User
+         16 │         .order_by(|o| o.created_at.desc());
+
+      fix: Add `user: CurrentUser` to the parameters of `list`, then `.owned_by(&user)`
+           right after `Order::query()`: the query returns only this user's orders.
+           A screen that needs every order uses `.all_owners("reason")`, which needs human approval.
+      more: balise explain CMP0201
+
+✗ 1 error · 0 new warnings · 2 known findings (balise audit)
+```
+
+`balise check --hook` prints the same text on stderr with exit code 2, plus one line asking to fix before going on; `balise check --format json` gives the same data to tools and MCP.
 4. **Generated lints.** The generated `Cargo.toml` turns `deprecated` and `clippy::await_holding_lock` into errors. `balise check` also rejects `static mut`, global mutable state, `std::sync::Mutex`, `RefCell`, `tokio::spawn` and `println!` in application code.
 
 ### Hallucination traps

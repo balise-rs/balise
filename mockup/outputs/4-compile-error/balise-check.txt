@@ -1,0 +1,13 @@
+error CMP0201  This query on Order does not say which user's rows it reads
+      at src/orders/mod.rs:15 in orders::list
+
+         15 │     let mut query = Order::query()
+            │                     ^^^^^^^^^^^^^^ Order is owned by User
+         16 │         .order_by(|o| o.created_at.desc());
+
+      fix: Add `user: CurrentUser` to the parameters of `list`, then `.owned_by(&user)`
+           right after `Order::query()`: the query returns only this user's orders.
+           A screen that needs every order uses `.all_owners("reason")`, which needs human approval.
+      more: balise explain CMP0201
+
+✗ 1 error · 0 new warnings · 2 known findings (balise audit)
