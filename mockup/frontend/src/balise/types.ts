@@ -39,7 +39,7 @@ export interface Page<T> {
 export interface ApiError {
   code: string;
   message: string;
-  fields?: Record<string, string>;
+  fields?: Record<string, { code: string; message: string }>;
   requestId: string;
 }
 

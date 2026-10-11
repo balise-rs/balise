@@ -6,9 +6,9 @@
 use balise_core::error_codes::{CMP0001, CMP0002, CMP0003, CMP0004, CMP0005, ErrorCode};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use syn::spanned::Spanned;
-use syn::{FnArg, GenericArgument, ItemFn, LitStr, PathArguments, Type};
+use syn::{FnArg, GenericArgument, ItemFn, LitStr, PathArguments, ReturnType, Type};
 
 /// `#[get("/orders/{id}")]`: a handler for `GET` requests on this path.
 #[proc_macro_attribute]
@@ -61,7 +61,7 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
             &[],
         )
     })?;
-    let function: ItemFn = syn::parse2(item.clone()).map_err(|_| {
+    let mut function: ItemFn = syn::parse2(item.clone()).map_err(|_| {
         error(
             item.span(),
             CMP0005,
@@ -89,6 +89,8 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
     let mut bodies = Vec::new();
     let mut path_values = 0;
     let mut types = Vec::new();
+    // `Path`, `Query` and `Body` give the value itself: true for each parameter to unwrap.
+    let mut unwrap = Vec::new();
     for input in &function.sig.inputs {
         let FnArg::Typed(typed) = input else {
             return Err(error(
@@ -103,7 +105,8 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
             Some(("Path", arity)) => path_values += arity,
             _ => {}
         }
-        types.push(&typed.ty);
+        types.push(typed.ty.clone());
+        unwrap.push(inner_value(&typed.ty).is_some());
     }
     if bodies.len() > 1 {
         let count = bodies.len().to_string();
@@ -128,6 +131,16 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
         ));
     }
 
+    // The handler as compiled takes the values themselves: `id: Path<OrderId>` becomes
+    // `id: OrderId`, so its body never writes `*id` or `.into_inner()`.
+    for input in function.sig.inputs.iter_mut() {
+        if let FnArg::Typed(typed) = input
+            && let Some(inner) = inner_value(&typed.ty)
+        {
+            *typed.ty = inner;
+        }
+    }
+
     let invoke = format_ident!("__balise_invoke_{}", name);
     let route = format_ident!("__BALISE_ROUTE_{}", name_text.to_uppercase());
     let method = format_ident!("{}", method);
@@ -135,6 +148,28 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
         .map(|i| format_ident!("__value_{}", i))
         .collect();
     let private = quote!(::balise::__private);
+    let extractions: Vec<_> = values
+        .iter()
+        .zip(&types)
+        .zip(&unwrap)
+        .map(|((value, ty), unwrap)| {
+            let unwrap = match unwrap {
+                true => quote!(let #value = #value.__into_value();),
+                false => quote!(),
+            };
+            quote_spanned! {ty.span()=>
+                let #value = match ::balise::__private::extract::<#ty>(&mut request).await {
+                    ::std::result::Result::Ok(value) => value,
+                    ::std::result::Result::Err(response) => return response,
+                };
+                #unwrap
+            }
+        })
+        .collect();
+    let output = match &function.sig.output {
+        ReturnType::Default => quote_spanned!(function.sig.ident.span()=> ()),
+        ReturnType::Type(_, ty) => quote!(#ty),
+    };
 
     Ok(quote! {
         #function
@@ -142,13 +177,8 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
         #[doc(hidden)]
         fn #invoke(mut request: #private::Request) -> #private::ResponseFuture {
             ::std::boxed::Box::pin(async move {
-                #(
-                    let #values = match <#types as #private::FromRequest>::from_request(&mut request).await {
-                        ::std::result::Result::Ok(value) => value,
-                        ::std::result::Result::Err(response) => return response,
-                    };
-                )*
-                #private::IntoResponse::into_response(#name(#(#values),*).await)
+                #(#extractions)*
+                #private::respond::<#output>(#name(#(#values),*).await)
             })
         }
 
@@ -227,6 +257,25 @@ fn last_segment(ty: &Type) -> Option<(&'static str, usize)> {
         _ => 1,
     };
     Some((name, arity))
+}
+
+/// For `Path<T>`, `Query<T>` and `Body<T>`, the `T` the handler receives.
+fn inner_value(ty: &Type) -> Option<Type> {
+    let Type::Path(path) = ty else { return None };
+    let segment = path.path.segments.last()?;
+    if !matches!(
+        segment.ident.to_string().as_str(),
+        "Path" | "Query" | "Body"
+    ) {
+        return None;
+    }
+    let PathArguments::AngleBracketed(args) = &segment.arguments else {
+        return None;
+    };
+    match args.args.first()? {
+        GenericArgument::Type(inner) => Some(inner.clone()),
+        _ => None,
+    }
 }
 
 /// A compile error with the code's message, fix and how to learn more.

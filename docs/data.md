@@ -49,7 +49,7 @@ async fn create(input: Body<CreateOrder>, user: CurrentUser, db: Db) -> Result<C
     let order = Order::create(db, NewOrder {
         user: user.owner(),
         quantity: input.quantity,
-        note: input.note.clone(),
+        note: input.note,
     })
     .await?;
     Ok(Created(order.into()))
@@ -57,7 +57,7 @@ async fn create(input: Body<CreateOrder>, user: CurrentUser, db: Db) -> Result<C
 
 #[get("/orders/{id}")]
 async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> {
-    Ok(Order::get(db, *id).owned_by(&user).await?.into())     // missing row: 404
+    Ok(Order::get(db, id).owned_by(&user).await?.into())     // missing row: 404
 }
 ```
 
@@ -576,7 +576,7 @@ A handler that writes to two tables is atomic without the agent thinking about i
 Reading a row, checking it, then writing it is the shape every agent writes. Without a lock, two concurrent requests can both pass the check. So the lock is part of the types:
 
 ```rust
-let order = Order::get(db, *id).owned_by(&user).for_update().await?;   // Locked<Order>
+let order = Order::get(db, id).owned_by(&user).for_update().await?;   // Locked<Order>
 if order.status != OrderStatus::Pending {
     return Err(OrderError::NotPending.into());
 }
@@ -628,7 +628,7 @@ struct UpdateOrder {
     note: Patch<Option<String>>,
 }
 
-let order = Order::get(db, *id).owned_by(&user).for_update().await?;
+let order = Order::get(db, id).owned_by(&user).for_update().await?;
 order.update(db, |o| input.apply_to(o)).await?;
 ```
 
@@ -637,7 +637,7 @@ order.update(db, |o| input.apply_to(o)).await?;
 ### Updates in business logic
 
 ```rust
-let order = Order::get(db, *id).owned_by(&user).for_update().await?;
+let order = Order::get(db, id).owned_by(&user).for_update().await?;
 order.update(db, |o| o.status = Status::Paid).await?;
 ```
 

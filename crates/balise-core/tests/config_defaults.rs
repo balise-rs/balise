@@ -1,13 +1,14 @@
-//! The address and the API prefix come from `Config`: no other code hard-codes them.
+//! The address, the API prefix and the body size come from `Config`: no other code, error
+//! explanation included, hard-codes them.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Literals that only `Config`'s defaults may contain.
-const FORBIDDEN: &[&str] = &["\"/api", ":3000", "3000\""];
+const FORBIDDEN: &[&str] = &["\"/api", ":3000", "3000\"", "2 MB", "2 * 1024"];
 
 #[test]
-fn only_config_has_the_default_address_and_prefix() {
+fn only_config_has_the_defaults() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut files = Vec::new();
     for entry in fs::read_dir(&crates).unwrap() {

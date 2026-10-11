@@ -14,7 +14,6 @@ use api::{CurrentUserView, RequestPasswordReset, ResetPassword, SignIn, SignUp};
 
 #[post("/auth/sign-up")]
 async fn sign_up(input: Body<SignUp>, session: Session, db: Db) -> Result<Created<CurrentUserView>> {
-    let input = input.into_inner();
     let user = User::create(db, NewUser {
         email: input.email,
         password_hash: Password::hash(&input.password),

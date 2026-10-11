@@ -26,6 +26,7 @@ http-body-util = "0.1.5"
 hyper = { version = "1.11", features = ["server", "http1"] }
 hyper-util = { version = "0.1.21", features = ["tokio"] }
 linkme = "0.3.37"
+serde_json = "1.0.151"
 
 # Procedural macros
 proc-macro2 = "1.0.107"

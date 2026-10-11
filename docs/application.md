@@ -62,7 +62,7 @@ use balise::prelude::*;
 // src/orders/mod.rs
 #[get("/orders/{id}")]
 async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> {
-    let order = Order::get(db, *id).owned_by(&user).await?;     // missing row, or someone else's: 404
+    let order = Order::get(db, id).owned_by(&user).await?;     // missing row, or someone else's: 404
     Ok(OrderView::from(order))
 }
 ```
@@ -88,6 +88,10 @@ Declare what the handler needs as parameters. Balise provides them.
 | `RequestId` | The request identifier, as it appears in logs |
  
 At most one `Body` per handler. The order of parameters does not matter.
+
+`Path`, `Query` and `Body` give you the value itself: in the handler, `id: Path<OrderId>` is an `OrderId` and `input: Body<CreateOrder>` is a `CreateOrder`. Use them directly, and move their fields out: no `*id`, no `.into_inner()`, no `.clone()`. Several path parameters can be read in one tuple and destructured: `(shop_id, id): Path<(ShopId, OrderId)>`. `Db`, `State<T>`, `CurrentUser` and `RequestId` are services, used as they are.
+
+A type Balise cannot provide as a parameter is a compile error (`CMP0006`), and so is a return type that is not a response (`CMP0007`).
  
 ### Input
  
@@ -125,7 +129,9 @@ Validation attributes:
 | `one_of("a", "b")` | strings |
 | `default = value` | any field |
  
-If validation fails, Balise answers `422` with one message per field. The handler is not called.
+If validation fails, Balise answers `422` (`VAL0001`) with a code and a message per field: missing (`VAL0004`), wrong type (`VAL0005`), rule not met (`VAL0006`) or unknown (`VAL0007`). The handler is not called.
+
+A field the `Input` does not declare is rejected, with the closest declared name when there is one (`quantiy`: did you mean `quantity`?): a typo never passes silently. An `Input` that describes a payload sent by a third party, such as a webhook, accepts unknown fields with `#[input(allow_unknown_fields)]`.
  
 The same `Input` struct works for `Body` and `Query`. Name inputs after the action: `CreateOrder`, `UpdateOrder`, `OrderFilters`.
  
@@ -182,7 +188,7 @@ async fn upload(input: Body<UploadVideo>, user: CurrentUser) -> Result<Created<V
 ```
  
 - A `Body` that contains a `File` is read as `multipart/form-data` automatically.
-- The route's size limit and timeout are computed from the declaration. Other routes keep the 2 MB default.
+- The route's size limit and timeout are computed from the declaration. Other routes keep the 2 MB default, unless `budgets.toml` raises their `body_size` ([budgets](agent-experience.md#budgets)).
 - `File` is already on disk when the handler runs; it is never fully loaded in memory.
 - The generated TypeScript client knows each route's limits and accepted types, and rejects a file that is too large before sending it. Front end and back end cannot disagree.
 - Too large or wrong type: `413` or `415`, with the limit in the error message.
@@ -259,7 +265,7 @@ async fn list(cache: State<PriceCache>) -> Result<Vec<PriceView>> { ... }
 - CPU-heavy work (image processing, large computations) goes in `balise::blocking(|| ...)`, which keeps the server responsive.
 - Work that continues after the response goes in `balise::spawn(|db| async move { ... })`, which logs failures in Balise's format. The task gets its own `db`: never use the request's.
 - Work that must happen only if the request's writes are saved goes in `db.after_commit(async move { ... })`.
-- To change a row you read, lock it: `Order::get(db, *id).owned_by(&user).for_update()`. Without the lock, `update` and `delete` do not compile ([data.md](data.md#locking-rows)).
+- To change a row you read, lock it: `Order::get(db, id).owned_by(&user).for_update()`. Without the lock, `update` and `delete` do not compile ([data.md](data.md#locking-rows)).
 - Do not call `tokio::spawn` or `std::thread::spawn` directly.
 ## Tests
  
@@ -304,4 +310,3 @@ Investigate through Balise, never in the framework's dependencies. Everything be
 
 From the review of the mock-up by agents (2026-10-11):
 
-- **Rust ownership leaks through extractors.** The mock-up uses five different forms: `*id`, a parameter passed as is, `&input.email`, `input.into_inner()`, and moving `filters.status` out. `.page(db, page)` receives a `Query<PageParams>` while the query method takes `PageParams`. One rule is needed, ideally with no `*`, `&` or `into_inner()` for the agent to choose.

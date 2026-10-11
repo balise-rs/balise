@@ -96,7 +96,7 @@ The router is Balise's own, entirely: its answers (`404`, `405`, `balise why`) a
 2. Balise assigns a request ID and starts a log span.
 3. The router finds the handler, or answers `404` / `405`.
 4. Middleware runs: the route's timeout and body size limit, CORS, compression, authentication when enabled.
-5. Extraction builds each parameter: path, query, body, then services (`Db`, `State`, `CurrentUser`). Validation errors answer `422` without calling the handler.
+5. Extraction builds each parameter: path, query, body, then services (`Db`, `State`, `CurrentUser`). A path value of the wrong type answers `404` (`HTTP0011`), a body that is not JSON `400` (`VAL0002`), another content type `415` (`VAL0003`), a body over the limit `413` (`HTTP0012`, read no further than the limit), and validation errors `422` (`VAL0001`) with a code and a message per field, without calling the handler. Every request gets an identifier (`req_7f3a2c`), in every error body and in logs.
 6. The handler runs.
 7. The result is converted into a response. Errors become responses with their code (see below).
 8. The request is logged once, with its duration, status, query count, and request ID.
@@ -108,24 +108,26 @@ The router is Balise's own, entirely: its answers (`404`, `405`, `balise why`) a
 {
   "error": {
     "code": "VAL0001",
-    "message": "Validation failed",
-    "fields": { "contact": "must be an email" },
+    "message": "Invalid fields: contact",
+    "fields": { "contact": { "code": "VAL0006", "message": "must be an email" } },
     "request_id": "req_7f3a2c"
   }
 }
 ```
  
-`fields` appears only for validation errors. In dev, the body adds `location`, `fix` and `cause`. In prod, a `5xx` keeps only a generic code (`HTTP0500`), a generic message and the request ID; a `4xx` keeps its code and message.
+`fields` appears only for validation errors, with one code per field: missing (`VAL0004`), wrong type (`VAL0005`) or rule not met (`VAL0006`). In dev, the body adds `location`, `fix` and `cause`. In prod, a `5xx` keeps only a generic code (`HTTP0500`), a generic message and the request ID; a `4xx` keeps its code and message.
  
 Why a typed return rather than a response object built in the handler: the output type is known at compile time, so Balise can generate TypeScript types, check each route's shape, and describe it through MCP. A response object (`Response::ok(json)`) would hide the shape until runtime and open a second way to signal errors. Success or failure is carried by the HTTP status; the generated TypeScript client exposes it to the front end as `{ ok: true, data }` or `{ ok: false, error }`, so no envelope is needed on the wire.
  
 ### Per-route limits
  
-Every route has its own body size limit and timeout, computed at compile time from its signature:
+Every route has its own body size limit and timeout, deduced from its signature like its [budgets](agent-experience.md#budgets):
  
 - a route without files gets the defaults (2 MB, 30 s);
-- a route that accepts files gets the sum of its declared file sizes plus a margin for the other fields, and a timeout scaled to that size, unless the route sets one.
-The global limit is never raised for one route's sake.
+- a route that accepts files gets the sum of its declared file sizes plus a margin for the other fields, and a timeout scaled to that size, unless the route sets one;
+- a route meant to receive more, such as a bulk import, raises its `body_size` in `budgets.toml`, under the handler's name. Raising it is a sensitive decision, like any budget.
+
+The global limit is never raised for one route's sake. A body over the limit answers `413` (`HTTP0012`), with the limit in the message.
  
 File bodies are streamed to a temporary file as they arrive, never held in memory. The size is checked while streaming: the upload stops as soon as it exceeds the limit. The declared file type is checked against the file's content (magic bytes), not only its `Content-Type` header.
  
@@ -181,7 +183,7 @@ On `SIGTERM`:
 | Setting | Default |
 | --- | --- |
 | Request timeout | 30 s; routes with files: scaled to the declared size |
-| Body size limit | 2 MB; routes with files: computed from the declared file sizes |
+| Body size limit | 2 MB; routes with files: computed from the declared file sizes; per route: `body_size` in `budgets.toml` |
 | Database query timeout | 10 s |
 | Shutdown drain timeout | 30 s |
 | Health endpoints | `/health` (process alive), `/ready` (ready for traffic) |

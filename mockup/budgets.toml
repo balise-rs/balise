@@ -1,4 +1,6 @@
-# Budgets: maximum queries and response size per route, checked by tests.
+# Budgets: maximum queries, response size and body size per route.
+# `queries` and `response_size` are checked by tests; `body_size` is enforced at runtime
+# (a larger request body answers 413).
 #
 # Every route already has a default budget, deduced from its shape (return type, HTTP method).
 # This file only holds overrides. To see each route's effective budget and where it comes from:
@@ -12,3 +14,6 @@
 # ["orders::list"]
 # queries = 2
 # response_size = "200KB"
+#
+# ["imports::create"]
+# body_size = "20MB"

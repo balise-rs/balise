@@ -126,7 +126,7 @@ fn collect<'a>(
     if let Some(next) = &node.param
         && !first.is_empty()
     {
-        values.push(percent_decode(first));
+        values.push(crate::text::percent_decode(first));
         collect(next, rest, values, found);
         values.pop();
     }
@@ -163,27 +163,6 @@ fn duplicate(first: &Route, second: &Route) -> Event {
             ),
         ],
     )
-}
-
-/// Decodes `%XX` sequences; anything that is not valid UTF-8 afterwards is replaced.
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let hex = |b: u8| (b as char).to_digit(16);
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let (Some(high), Some(low)) = (hex(bytes[i + 1]), hex(bytes[i + 2]))
-        {
-            decoded.push((high * 16 + low) as u8);
-            i += 3;
-        } else {
-            decoded.push(bytes[i]);
-            i += 1;
-        }
-    }
-    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 #[cfg(test)]

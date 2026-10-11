@@ -40,6 +40,7 @@ Option A is the one implemented first.
 | Recorded | Topic | Option A | Option B | Measured by | Status |
 | --- | --- | --- | --- | --- | --- |
 | 2026-10-10 | Handler inputs | Typed parameters in the signature | A single `ctx` object | Agents | to test |
+| 2026-10-11 | Extractor syntax | `id: Path<OrderId>`, unwrapped by the route macro: `id` is an `OrderId` in the body | Plain types with parameter attributes: `#[path] id: OrderId`, `#[body] input: CreateOrder` | Agents (confusion between the declared and the received type) | to test |
 | 2026-10-10 | Handler names | Short verbs in the resource module (`orders::create`) | Verb and resource (`create_order`) | Agents | to test |
 
 ### Data

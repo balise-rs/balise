@@ -113,4 +113,40 @@ does not start. Paths are compared by shape: `/orders/{id}` and `/orders/{order_
 same route.
 "#,
     }
+    HTTP0011 {
+        title: "Invalid path parameter",
+        message: "`{name}` in the path is not a valid {expected}: `{value}`",
+        fix: "Use a URL whose parameters have the expected form; `balise routes` shows each route's parameters.",
+        explanation: r#"
+A path parameter could not be read as the type the handler declares (`Path<u32>` and the
+path says `abc`). The URL designates nothing, so the answer is `404`, as for a row that does
+not exist.
+"#,
+    }
+    HTTP0012 {
+        title: "Request body too large",
+        message: "The request body is larger than this route's limit of {limit}",
+        fix: "If the route is meant to receive bodies this large, raise its `body_size` in `budgets.toml`. To receive files, declare `File` fields in the route's `Input`. Otherwise the client is sending more than the route accepts.",
+        explanation: r#"
+Balise stops reading a body as soon as it exceeds the route's limit and answers `413`,
+without loading the rest in memory. There are three usual causes:
+
+- The route is meant to receive this much, such as a bulk import. Raise its limit in
+  `budgets.toml`, under the handler's name:
+
+      ["imports::create"]
+      body_size = "20MB"
+
+  Raising a limit is a sensitive decision (`.balise/policy.toml`): a larger limit lets any
+  client make the server read more.
+- The client sends a file inside the JSON, as base64. Declare it as a `File` field of the
+  route's `Input` instead: the file is streamed to disk, and the route's limit follows the
+  declared sizes.
+- The client sends more than the route accepts, by mistake or not. The `413` is the right
+  answer and there is nothing to change on the server.
+
+The default limit of a route without files is set in `balise.toml`; `balise explain config`
+shows its value, and `balise routes` shows each route's limit and where it comes from.
+"#,
+    }
 }

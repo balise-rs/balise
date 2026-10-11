@@ -7,19 +7,22 @@ use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use balise_core::config::Config;
 use balise_core::error_codes::{
-    EXT0001, ErrorCode, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007,
-    HTTP0008, HTTP0009,
+    EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007, HTTP0008,
+    HTTP0009, HTTP0012,
 };
 use balise_core::event::{Event, Level};
 use balise_core::handler::{self, Method};
 use balise_core::registry;
 use balise_core::router::{Match, Router};
+use balise_core::text::format_size;
 use bytes::Bytes;
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -36,8 +39,8 @@ const REPORT_PERIOD: Duration = Duration::from_secs(1);
 /// Builds the router from the registered routes, starts the runtime and serves. Never
 /// returns: on a fatal error, reports it and exits with a non-zero code.
 pub fn run(config: Config) -> ! {
-    let router = match Router::build(registry::routes(), &config.api_base()) {
-        Ok(router) => Arc::new(router),
+    let server = match Router::build(registry::routes(), &config.api_base()) {
+        Ok(router) => Arc::new(Server::new(router, &config)),
         Err(event) => fail(event),
     };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -52,7 +55,7 @@ pub fn run(config: Config) -> ! {
     };
     runtime.block_on(async {
         match bind(&config.address).await {
-            Ok(listener) => serve(listener, router).await,
+            Ok(listener) => serve(listener, server).await,
             Err(event) => fail(event),
         }
     })
@@ -155,7 +158,23 @@ impl Throttle {
 
 /// Accepts connections forever. Each connection, and each request, runs in its own task:
 /// a client that disconnects does not cancel the handler.
-pub async fn serve(listener: TcpListener, router: Arc<Router>) -> ! {
+/// What every request needs: the routes, and the limits from configuration.
+#[derive(Debug)]
+pub struct Server {
+    router: Router,
+    body_size: usize,
+}
+
+impl Server {
+    pub fn new(router: Router, config: &Config) -> Server {
+        Server {
+            router,
+            body_size: config.body_size,
+        }
+    }
+}
+
+pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
     let mut throttle = Throttle {
         last_report: None,
         unreported: 0,
@@ -175,16 +194,20 @@ pub async fn serve(listener: TcpListener, router: Arc<Router>) -> ! {
                 continue;
             }
         };
-        let router = router.clone();
+        let server = server.clone();
         tokio::spawn(async move {
             let service = service_fn(move |request| {
-                let router = router.clone();
+                let server = server.clone();
                 async move {
+                    let request_id = request_id();
+                    let id = request_id.clone();
                     Ok::<_, Infallible>(to_hyper(
-                        match tokio::spawn(handle(router, request)).await {
+                        match tokio::spawn(handle(server, request, request_id)).await {
                             Ok(response) => response,
                             // Panics become proper crash reports later; for now, a plain 500.
-                            Err(_) => error_response(500, EXT0001, "Internal error"),
+                            Err(_) => {
+                                handler::Response::error(500, EXT0001, "Internal error", &[], &id)
+                            }
                         },
                     ))
                 }
@@ -199,19 +222,49 @@ pub async fn serve(listener: TcpListener, router: Arc<Router>) -> ! {
     }
 }
 
-async fn handle(router: Arc<Router>, request: Request<Incoming>) -> handler::Response {
-    let method = Method::parse(request.method().as_str());
-    let path = request.uri().path();
-    match router.find(method, path) {
+async fn handle(
+    server: Arc<Server>,
+    request: Request<Incoming>,
+    request_id: String,
+) -> handler::Response {
+    let (parts, body) = request.into_parts();
+    let method = Method::parse(parts.method.as_str());
+    let path = parts.uri.path();
+    match server.router.find(method, path) {
         Match::Found {
             route,
             params,
             path,
         } => {
+            let body = match Limited::new(body, server.body_size).collect().await {
+                Ok(collected) => collected.to_bytes().to_vec(),
+                Err(error) if error.is::<LengthLimitError>() => {
+                    let limit = format_size(server.body_size);
+                    let message = HTTP0012.format_message(&[("limit", &limit)]);
+                    return handler::Response::error(413, HTTP0012, &message, &[], &request_id);
+                }
+                // The client closed the connection or sent a malformed body: it will most
+                // likely never read this answer.
+                Err(error) => {
+                    let message = HTTP0002.format_message(&[("cause", &error.to_string())]);
+                    return handler::Response::error(400, HTTP0002, &message, &[], &request_id);
+                }
+            };
+            let headers = parts
+                .headers
+                .iter()
+                .filter_map(|(name, value)| {
+                    Some((name.as_str().to_string(), value.to_str().ok()?.to_string()))
+                })
+                .collect();
             let request = handler::Request {
                 method: route.method,
                 path,
                 params,
+                query: parts.uri.query().unwrap_or_default().to_string(),
+                headers,
+                body,
+                request_id,
             };
             (route.invoke)(request).await
         }
@@ -219,32 +272,42 @@ async fn handle(router: Arc<Router>, request: Request<Incoming>) -> handler::Res
             let allowed: Vec<&str> = allowed.iter().map(|m| m.as_str()).collect();
             let allowed = allowed.join(", ");
             let message = HTTP0009.format_message(&[
-                ("method", request.method().as_str()),
+                ("method", parts.method.as_str()),
                 ("path", path),
                 ("allowed", &allowed),
             ]);
-            let mut response = error_response(405, HTTP0009, &message);
+            let mut response = handler::Response::error(405, HTTP0009, &message, &[], &request_id);
             response.headers.push(("allow", allowed));
             response
         }
         Match::NotFound => {
             let message =
-                HTTP0003.format_message(&[("method", request.method().as_str()), ("path", path)]);
-            error_response(404, HTTP0003, &message)
+                HTTP0003.format_message(&[("method", parts.method.as_str()), ("path", path)]);
+            handler::Response::error(404, HTTP0003, &message, &[], &request_id)
         }
     }
 }
 
-/// The single error body ([engine.md](docs/engine.md#response-format)).
-fn error_response(status: u16, code: &ErrorCode, message: &str) -> handler::Response {
-    handler::Response::json(
-        status,
-        format!(
-            r#"{{"error":{{"code":"{}","message":"{}"}}}}"#,
-            code.code(),
-            json_escape(message)
-        ),
-    )
+/// A short identifier for a request, as logs show it: `req_7f3a2c`. Unique enough to find a
+/// request in the logs, not a secret.
+fn request_id() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    static SEED: OnceLock<u64> = OnceLock::new();
+    let seed = *SEED.get_or_init(|| {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as u64)
+    });
+    // SplitMix64 over a counter: consecutive requests get unrelated-looking ids.
+    let mut x = seed.wrapping_add(
+        COUNTER
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15),
+    );
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^= x >> 31;
+    format!("req_{:06x}", x & 0xFF_FFFF)
 }
 
 fn to_hyper(response: handler::Response) -> Response<Full<Bytes>> {
@@ -278,22 +341,6 @@ fn connection_event(error: &hyper::Error, peer: SocketAddr) -> Event {
     } else {
         Event::coded(Level::Error, EXT0001, &[("cause", &error.to_string())]).with_cause(error)
     }
-}
-
-fn json_escape(text: &str) -> String {
-    let mut escaped = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            c if c < ' ' => escaped.push_str(&format!("\\u{:04x}", c as u32)),
-            c => escaped.push(c),
-        }
-    }
-    escaped
 }
 
 fn fail(event: Event) -> ! {
@@ -359,10 +406,5 @@ mod tests {
             next.cause.as_deref(),
             Some("os error 24, 2 more times since the last report")
         );
-    }
-
-    #[test]
-    fn escapes_json_strings() {
-        assert_eq!(json_escape("a\"b\\c\nd\u{1}"), "a\\\"b\\\\c\\nd\\u0001");
     }
 }

@@ -49,10 +49,9 @@ Done !
 Done !
 
 ### 3.3 Extractors, validation, Input and Output
-Implement `Path`, `Query`, `Body`, `State`, `RequestId` and the `Input` / `Output` derives with their validation attributes. Validation errors return a `422` with one message per field. As soon as routes and extractors compile, the reference project (or the part it can already build) joins the compile benchmark, and every later API change is measured.
+Implement `Path`, `Query`, `Body`, `RequestId` and the `Input` / `Output` derives with their validation attributes. Validation errors return a `422` with one message per field. As soon as routes and extractors compile, the reference project (or the part it can already build) joins the compile benchmark, and every later API change is measured.
 - More: [application.md](application.md#parameters)
-- To decide: type erasure after extraction or full monomorphization ([alternatives.md](alternatives.md))
-- To decide: one rule for reading extractors, without `*`, `&` or `into_inner()` ([application.md](application.md#open-questions))
+- Done: extractors and their unwrapping, one code per field cause. Next: `Input` / `Output` derives and validation (unknown fields `VAL0007`, `#[input(allow_unknown_fields)]`), then the benchmark's "web" variant.
 
 ### 3.4 Response and error format
 Map return types to statuses (`Created`, `NoContent`, `Page`…) and errors to the single error body. Implement `#[derive(AppError)]`. The response files of `mockup/outputs/` are checked end to end on the mock-up's routes.
@@ -75,7 +74,7 @@ Implement `.state()`, `State<T>`, `Shared<T>`, `balise::blocking` and `balise::s
 - Handlers run in their own task, so a client disconnect does not cancel them; timeouts still do ([engine.md](engine.md#execution-model))
 
 ### 3.8 Uploads and per-route limits
-Implement `File` fields, multipart parsing streamed to disk, type checks on content, and limits computed from declarations. Add per-route pagination limits on the same model.
+Implement `File` fields, multipart parsing streamed to disk, type checks on content, and limits computed from declarations. Add per-route pagination limits on the same model. Read `budgets.toml` (embedded in the binary) for per-route `body_size`; its test checks stay in 9.3.
 - More: [application.md](application.md#files), [engine.md](engine.md#per-route-limits)
 - To handle: authentication and cheap extractors run before the body is read ([engine.md](engine.md#open-questions))
 

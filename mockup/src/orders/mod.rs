@@ -23,7 +23,7 @@ async fn list(filters: Query<OrderFilters>, page: Query<PageParams>, user: Curre
 
 #[get("/orders/{id}")]
 async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> {
-    Ok(Order::get(db, *id).owned_by(&user).await?.into())
+    Ok(Order::get(db, id).owned_by(&user).await?.into())
 }
 
 #[post("/orders")]
@@ -31,7 +31,7 @@ async fn create(input: Body<CreateOrder>, user: CurrentUser, db: Db) -> Result<C
     let order = Order::create(db, NewOrder {
         user: user.owner(),
         quantity: input.quantity,
-        note: input.note.clone(),
+        note: input.note,
     })
     .await?;
     Ok(Created(order.into()))
@@ -39,19 +39,19 @@ async fn create(input: Body<CreateOrder>, user: CurrentUser, db: Db) -> Result<C
 
 #[patch("/orders/{id}")]
 async fn update(id: Path<OrderId>, input: Body<UpdateOrder>, user: CurrentUser, db: Db) -> Result<OrderView> {
-    let order = Order::get(db, *id).owned_by(&user).for_update().await?;
+    let order = Order::get(db, id).owned_by(&user).for_update().await?;
     Ok(order.update(db, |o| input.apply_to(o)).await?.into())
 }
 
 #[delete("/orders/{id}")]
 async fn delete(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<NoContent> {
-    Order::get(db, *id).owned_by(&user).for_update().await?.delete(db).await?;
+    Order::get(db, id).owned_by(&user).for_update().await?.delete(db).await?;
     Ok(NoContent)
 }
 
 #[post("/orders/{id}/cancel")]
 async fn cancel(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> {
-    let order = Order::get(db, *id).owned_by(&user).for_update().await?;
+    let order = Order::get(db, id).owned_by(&user).for_update().await?;
     if !order.is_pending() {
         return Err(OrderError::NotPending.into());
     }

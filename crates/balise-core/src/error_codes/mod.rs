@@ -35,14 +35,20 @@ macro_rules! codes {
 mod cmp;
 mod ext;
 mod http;
+mod val;
 
 pub use cmp::*;
 pub use ext::*;
 pub use http::*;
+pub use val::*;
 
 /// Every area, with its prefix and its codes.
-pub const AREAS: &[(&str, &[&ErrorCode])] =
-    &[("CMP", cmp::ALL), ("EXT", ext::ALL), ("HTTP", http::ALL)];
+pub const AREAS: &[(&str, &[&ErrorCode])] = &[
+    ("CMP", cmp::ALL),
+    ("EXT", ext::ALL),
+    ("HTTP", http::ALL),
+    ("VAL", val::ALL),
+];
 
 /// A registered error code. Only the registry can create one.
 #[derive(Debug, PartialEq, Eq)]

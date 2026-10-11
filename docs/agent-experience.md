@@ -205,9 +205,10 @@ Each finding is a `PERF` event with its location and expected fix ([errors-and-l
 
 ### Budgets
 
-- Every route has a default budget (maximum queries, maximum response size), deduced from its shape: return type (`Page<T>`, `T`, `Created<T>`, `NoContent`) and HTTP method. Defaults live in Balise, not in the project, so improving them reaches every project.
+- Every route has a default budget (maximum queries, maximum response size, maximum body size), deduced from its shape: return type (`Page<T>`, `T`, `Created<T>`, `NoContent`) and HTTP method. Defaults live in Balise, not in the project, so improving them reaches every project.
 - `budgets.toml` holds only overrides, one entry per handler (`orders::list`), so changing the API prefix does not touch them.
 - `balise routes` and the `project_map` MCP tool show each route's effective budget, and whether it is a default or an override.
+- `body_size` is the only budget enforced at runtime: a larger body answers `413` (`HTTP0012`). `budgets.toml` is embedded in the binary, so a deployment cannot leave it behind, and an entry naming no handler stops the startup with a code.
 - Only deterministic budgets fail tests. Latency varies between machines, so it is reported in the audit, never enforced: a flaky test teaches an agent to retry, not to fix.
 - Every request made in a test checks its route's budget automatically. There is no per-test assertion: budgets live only in `budgets.toml`. Lowering a value is free; raising one is a [sensitive decision](#sensitive-decisions), so an agent cannot raise the limit to make a test pass.
 

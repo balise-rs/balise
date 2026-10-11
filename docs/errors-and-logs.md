@@ -50,7 +50,7 @@ Rules:
 - A code is never reused or renumbered. A retired code stays in the registry, and its explanation points to its replacement.
 - Every code is declared once, in a registry in the source with one file per area: code, title, message template, fix, explanation. Messages and `balise explain` read it directly; there is no separate doc page.
 - The same registry holds topics (`pagination`, `budgets`, `config`…), one file per topic, for `balise explain <topic>` and the `explain` MCP tool.
-- Validation failures share one code, `VAL0001`, with the detail of each field in `fields`.
+- A validation failure has one code for the response, `VAL0001`, and one code per field in `fields`, by cause: missing (`VAL0004`), wrong type (`VAL0005`), rule not met (`VAL0006`). The front end can show or translate each field's message from its code.
 - A test fails if a code is raised anywhere without being in the registry.
 - `EXT0001` wraps anything Balise could not classify. It always keeps the original message.
 

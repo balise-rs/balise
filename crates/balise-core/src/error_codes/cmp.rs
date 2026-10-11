@@ -52,4 +52,25 @@ A route attribute takes the path as a string literal, and goes on a function:
 `#[get("/orders")]` above `async fn list(…)`.
 "#,
     }
+    CMP0006 {
+        title: "Not a handler parameter",
+        message: "`{type}` cannot be a handler parameter",
+        fix: "Use `Path<T>`, `Query<T>`, `Body<T>`, `RequestId`, or a service such as `Db` or `CurrentUser`.",
+        explanation: r#"
+Every handler parameter is provided by Balise, which must know how to build it from the
+request. The parameters it knows are listed in the parameters table of the documentation:
+`Path<T>` for path parameters, `Query<T>` and `Body<T>` for an `Input`, and services.
+
+A plain type such as `u32` or `CreateOrder` is wrapped: `Path<u32>`, `Body<CreateOrder>`.
+"#,
+    }
+    CMP0007 {
+        title: "Not a handler result",
+        message: "`{type}` cannot be returned from a handler",
+        fix: "Return a struct that derives `Output`, or a wrapper: `Created<T>`, `NoContent`, `Page<T>`.",
+        explanation: r#"
+A handler's return type decides the response: an `Output` is a `200` with JSON, `Created<T>`
+a `201`, `NoContent` a `204`. A model is never returned: convert it to its view with `.into()`.
+"#,
+    }
 }

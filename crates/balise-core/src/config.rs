@@ -11,6 +11,9 @@ pub struct Config {
     /// The address the server listens on.
     pub address: String,
     pub api: ApiConfig,
+    /// The largest request body read, in bytes, for routes without files and without a
+    /// `body_size` in `budgets.toml`.
+    pub body_size: usize,
 }
 
 /// Where the API is served.
@@ -30,6 +33,7 @@ impl Default for Config {
                 prefix: "/api".to_string(),
                 version: None,
             },
+            body_size: 2 * 1024 * 1024,
         }
     }
 }

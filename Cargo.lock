@@ -41,6 +41,7 @@ name = "balise-core"
 version = "0.0.0"
 dependencies = [
  "linkme",
+ "serde_json",
 ]
 
 [[package]]
