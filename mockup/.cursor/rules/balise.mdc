@@ -1,0 +1,7 @@
+---
+description: Balise working loop
+alwaysApply: true
+---
+
+Follow AGENTS.md. After every change to a `.rs` file, run `balise check` and fix what it reports.
+At the end of a task, run `balise audit` and fix every warning.

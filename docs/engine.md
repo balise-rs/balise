@@ -78,7 +78,7 @@ Strict in dev, fail at startup in prod for what matters, never fail at runtime.
 ## Routing
  
 - Each route attribute (`#[get]`, `#[post]`…) registers the handler in a compile-time collection. There is no central router to maintain.
-- At startup, routes go into a radix tree that is never modified afterwards.
+- At startup, routes go into a radix tree that is never modified afterwards. The API prefix from configuration (`/api` by default) is added to every route then; route attributes never include it.
 - Startup fails if two handlers claim the same method and path, with an error naming both handlers.
 - The route macro also checks the handler's signature at compile time: unknown parameter type, two `Body` parameters, a `Path` count that does not match the route. Each case has its own error message.
 ## Handling a request

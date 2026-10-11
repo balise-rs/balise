@@ -1,0 +1,7 @@
+# Dependency safety. Loosening any of these needs human approval: `balise check` flags it.
+
+# A version is installable only 7 days after its release (in minutes).
+minimumReleaseAge: 10080
+
+# Install scripts of dependencies never run, except for the packages listed here.
+onlyBuiltDependencies: []

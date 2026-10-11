@@ -17,9 +17,9 @@ Everything Balise reports, at compile time or at runtime, follows one format tha
 | --- | --- |
 | Code | `DB0042` |
 | Title | `Query returned no row` |
-| Message | `No Order with id 18` |
+| Message | `No Order with id ord_01JB8XQ5` |
 | Location | `src/orders/mod.rs:27`, in `orders::get` |
-| Fix | `Return Error::not_found, or use Order::find_optional if a missing row is expected.` |
+| Fix | `Return Error::not_found, or use Order::find if a missing row is expected.` |
 | Doc | `balise explain DB0042` |
 | Request ID | `req_7f3a2c` (runtime errors only) |
 | Cause | the original error, kept in full |
@@ -79,16 +79,16 @@ The format depends on the environment and can be overridden with `log.format` in
 Dev (terminal, colored):
 
 ```
-14:02:11 ERROR DB0042  No Order with id 18
+14:02:11 ERROR DB0042  No Order with id ord_01JB8XQ5
          at src/orders/mod.rs:27 in orders::get
-         fix: Return Error::not_found, or use Order::find_optional if a missing row is expected.
+         fix: Return Error::not_found, or use Order::find if a missing row is expected.
          req_7f3a2c · balise explain DB0042
 ```
 
 Test and prod (one JSON object per line, on stdout):
 
 ```json
-{"time":"2026-10-10T12:02:11Z","level":"error","code":"DB0042","message":"No Order with id 18","handler":"orders::get","location":"src/orders/mod.rs:27","request_id":"req_7f3a2c","fix":"Return Error::not_found, or use Order::find_optional if a missing row is expected."}
+{"time":"2026-10-10T12:02:11Z","level":"error","code":"DB0042","message":"No Order with id ord_01JB8XQ5","handler":"orders::get","location":"src/orders/mod.rs:27","request_id":"req_7f3a2c","fix":"Return Error::not_found, or use Order::find if a missing row is expected."}
 ```
 
 ## Capturing other output
@@ -115,6 +115,7 @@ The agent meets most errors at compile time. Balise improves them at four levels
 3. **`balise check`.** It runs `cargo check`, reads the compiler's JSON diagnostics, and enriches the ones that involve Balise:
    - unknown method or type: the closest Balise API, its doc, and the MCP tool to call;
    - "future is not Send": the variable held across `.await` and how to fix it;
+   - a resource folder whose module is not declared in `main.rs`: its routes are never compiled, so nothing else would report them missing;
    - every diagnostic gets a `CMP` code and the same rendering as runtime errors.
 4. **Generated lints.** The generated `Cargo.toml` turns `deprecated` and `clippy::await_holding_lock` into errors. `balise check` also rejects `static mut`, global mutable state, `std::sync::Mutex`, `RefCell`, `tokio::spawn` and `println!` in application code.
 

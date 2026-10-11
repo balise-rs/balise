@@ -1,0 +1,28 @@
+[package]
+name = "shop"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# Optional modules, all enabled by `balise new` unless refused (`--no-orm`, `--no-auth`).
+balise = { version = "0.1", features = ["orm", "auth"] }
+
+# Enabled by `balise dev` and `balise test`. A release build never has them.
+[features]
+dev = ["balise/dev"]
+test = ["balise/test"]
+
+[lints.rust]
+deprecated = "deny"
+
+[lints.clippy]
+await_holding_lock = "deny"
+
+# Fast edit-compile loop: dependencies optimized once, your code compiled quickly.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false

@@ -17,7 +17,7 @@ frontend/
   pnpm-lock.yaml
 ```
  
-- API routes live under `/api` by default. Everything else is served by the front end.
+- API routes live under a prefix, `/api` by default, set in `balise.toml` with its version if any (`/api/v1`). Route attributes never repeat it. Everything else is served by the front end.
 - Front end and API share one origin, in dev and in prod, so CORS is not needed by default.
 ## Frameworks
  
@@ -28,7 +28,7 @@ React first: it is the framework agents know best, so the one where they make th
 - Vite, React, TypeScript and a router, configured;
 - the generated client, already wired;
 - an example resource with a list page, a detail page and a form, calling the real API;
-- with `--auth`: working sign-in, sign-up and sign-out pages, and route guards.
+- with the `auth` module (enabled unless `--no-auth`): working sign-in, sign-up, sign-out and password reset pages, and route guards.
 The agent starts from a live example, not a blank page.
  
 ## Generated client
@@ -66,6 +66,8 @@ if (res.ok) {
 | `useChannel(shops.orders, { shopId })` | realtime subscription, with automatic reconnection |
 | `useCurrentUser()` | signed-in user, or `null` |
  
+The same package provides the Vite plugin (`@balise-rs/react/vite`) and the lint configuration (`@balise-rs/react/eslint`); it will be split only if that becomes useful.
+
 Caching and invalidation are delegated to TanStack Query, hidden behind Balise's API. Replacing it later is possible without changing application code.
  
 ### Forms
@@ -143,7 +145,8 @@ Provided by the `auth` module.
  
 - Sessions in `HttpOnly`, `Secure`, `SameSite=Lax` cookies. No tokens in `localStorage`.
 - CSRF protection on every non-`GET` request. The generated client sends the token automatically.
-- Generated routes: sign up, sign in, sign out, current user, password reset. Generated pages for each, when the project has a front end.
+- Generated routes: sign up, sign in, sign out, current user, password reset, written in `src/auth/` so the agent can read and adapt them. Generated pages for each, when the project has a front end.
+- The `User` model is generated in `src/users/model.rs` and belongs to the application: the agent adds its own fields. `#[auth::user]` checks at compile time that the fields the module needs (`email`, `password_hash`) are present. A model provided by the module could not be extended, since Rust has no inheritance.
 - Passwords hashed with Argon2 (delegated crate). Sign-in attempts are rate-limited.
 - `CurrentUser` in a handler or channel returns the user or answers `401`.
 ## Open questions

@@ -1,0 +1,41 @@
+# Dev environment, started by `balise dev`. The app runs in the `dev` stage of the Dockerfile.
+
+services:
+  app:
+    build:
+      context: .
+      target: dev
+    working_dir: /app
+    environment:
+      BALISE_ENV: dev
+      DATABASE_URL: postgres://shop:shop@db:5432/shop
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      # Kept inside Docker: fast on every OS, and restarts never recompile.
+      - target:/app/target
+      - cargo-registry:/usr/local/cargo/registry
+      - node-modules:/app/frontend/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "shop"]
+      interval: 2s
+      retries: 15
+
+volumes:
+  target:
+  cargo-registry:
+  node-modules:
+  db:

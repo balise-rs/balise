@@ -41,7 +41,7 @@ The only thing to install is the `balise` CLI: a static binary, from a direct do
 
 `balise new` generates `compose.yaml` and a `Dockerfile`. `balise dev` starts:
 
-- the application, in the official `balise/dev` image (pinned Rust toolchain, Node for Vite), with reload;
+- the application, in the `dev` stage of the project's `Dockerfile` (pinned Rust toolchain, Node for Vite), with reload;
 - the database (PostgreSQL, or a volume for SQLite);
 - the Vite dev server ([web.md](web.md#dev-server-and-vite)).
 
@@ -51,6 +51,7 @@ Practical points:
 - On macOS and Windows, files mounted from the host are slow: `target/` stays inside the container.
 - The agent reaches MCP through `balise mcp` on the host, which relays to the dev server in the container. The agent never deals with Docker ([agent-experience.md](agent-experience.md#mcp)).
 - `balise dev --native` skips Docker when Rust is installed on the host.
+- One supervisor, wherever the app runs: inside the container, the `dev` stage runs `balise dev --inside`, the same CLI at the project's version. It watches files, rebuilds, restarts the app, runs Vite and merges every log into one stream. On the host, `balise dev` only starts `docker compose` and relays logs and MCP. `balise dev --native` runs the same supervisor directly on the host.
 
 ## Test
 

@@ -22,7 +22,7 @@ Agents have never seen Balise in their training data: left alone, they will gues
 | `balise dev` | start the dev environment, with reload |
 | `balise check` | compile and enrich errors |
 | `balise audit` | run tests or a scenario and report performance problems |
-| `balise explain <CODE>` | explain an error code |
+| `balise explain <CODE>` | explain an error code; `balise explain config` lists every setting and its default, `balise explain budgets` how default budgets are chosen |
 | `balise introspect` | print the project map as JSON |
 | `balise routes` | list routes and handlers |
 | `balise why <METHOD> <path>` | explain a `404` or `405` |
@@ -31,6 +31,10 @@ Agents have never seen Balise in their training data: left alone, they will gues
 | `balise migrate …` | create, apply, squash migrations ([data.md](data.md)) |
 | `balise config check --env <env>` | validate configuration without starting the app |
 | `balise mcp` | MCP server for agents (stdio) |
+
+### Optional modules at `balise new`
+
+`balise new` enables every optional module (`orm`, `auth`, and those to come), listed in the project's `Cargo.toml`. Each can be refused at creation with `--no-<module>` (`--no-orm`, `--no-auth`). The example adapts: with `orm`, a resource stored in the database; without it, a route and a page, and storage is left to the agent.
 
 ### Prerequisites at `balise new`
 
@@ -106,6 +110,8 @@ Agents run `cargo check` by habit, not `balise check`. `balise new` therefore in
 
 Hooks are plain project files, versioned with the code.
 
+Hooks call `balise check --hook` and `balise audit --hook`. In this mode the CLI speaks the agent's hook protocol: it reads the JSON describing the edit, skips files that are neither Rust nor TypeScript, and reports errors where the agent sees them (on Claude Code: stderr with exit code 2, the only output that reaches the agent). Without it, a plain `balise check` would run after every Markdown edit, and its failures would never reach the agent.
+
 ## Generators
 
 - `balise generate resource orders` creates the folder, the handlers, the model, the tests, and the migration.
@@ -128,7 +134,9 @@ Each finding is a `PERF` event with its location and expected fix ([errors-and-l
 
 ### Budgets
 
-- Budgets live in `budgets.toml`: maximum queries per route and maximum response size.
+- Every route has a default budget (maximum queries, maximum response size), deduced from its shape: return type (`Page<T>`, `T`, `Created<T>`, `NoContent`) and HTTP method. Defaults live in Balise, not in the project, so improving them reaches every project.
+- `budgets.toml` holds only overrides, one entry per handler (`orders::list`), so changing the API prefix does not touch them.
+- `balise routes` and the `project_map` MCP tool show each route's effective budget, and whether it is a default or an override.
 - Only deterministic budgets fail tests. Latency varies between machines, so it is reported in the audit, never enforced: a flaky test teaches an agent to retry, not to fix.
 - Any increase in `budgets.toml` is flagged by `balise check` as a change that needs human approval, so an agent cannot just raise the limit to make a test pass.
 

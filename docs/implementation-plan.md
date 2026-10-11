@@ -18,14 +18,12 @@ Done !
 Done !
 
 ### 1.4 Compile benchmark harness
-Build the measuring infrastructure: the scripts that time each scenario (cold build, `cargo check` after an edit…), the CI job, and the storage of results per commit. It is tested on a placeholder project, since Balise's API does not exist yet; the reference project comes with the mock-up.
-- More: [compilation.md](compilation.md#benchmark)
+Done !
 
 ## 2. Mock-up
 
 ### 2.1 Generated project layout
-Write by hand, without any framework code, what `balise new` would produce: folders, `main.rs`, `balise.toml`, `compose.yaml`, `AGENTS.md`, front end. The goal is to see the whole project before building it.
-- More: [application.md](application.md#project-layout), [web.md](web.md#project-layout)
+Done !
 
 ### 2.2 Handler, model, Input and Output
 Write one complete resource the way an agent would: model, inputs, outputs, handlers, tests. This is where naming and conventions are checked against real code.

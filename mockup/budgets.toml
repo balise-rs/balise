@@ -1,0 +1,13 @@
+# Budgets: maximum queries and response size per route, checked by tests.
+#
+# Every route already has a default budget, deduced from its shape (return type, HTTP method).
+# This file only holds overrides. To see each route's effective budget and where it comes from:
+#   balise routes            (or the `project_map` MCP tool)
+#   balise explain budgets   (how defaults are chosen)
+#
+# Raising a budget needs human approval: `balise check` flags every increase.
+#
+# Example override:
+# ["orders::list"]
+# queries = 2
+# response_size = "200KB"

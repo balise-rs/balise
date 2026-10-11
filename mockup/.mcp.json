@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "balise": { "command": "balise", "args": ["mcp"] }
+  }
+}

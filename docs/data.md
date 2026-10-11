@@ -552,13 +552,15 @@ let order = Order::fake().with(|o| o.quantity = 3).create(db).await?;
 
 `Input` types get the same: `CreateOrder::fake()` builds a valid request body for API tests.
 
+Factories and seeds exist only in dev and test builds, never in the production binary.
+
 ### Reproducible
 
 Fake data comes from a seed. The same seed gives the same data, so a failing test replays identically, for the agent as for a human. The seed is printed when a test fails.
 
 ### Seeded dev database
 
-`balise new` generates a `dev` dataset: the front end shows credible data from the first run instead of empty pages, so a screen can be judged at a glance. `balise seed <name>` loads a named dataset, defined in `seeds/<name>.rs` with the same factories.
+`balise new` generates a `dev` dataset: the front end shows credible data from the first run instead of empty pages, so a screen can be judged at a glance. `balise seed <name>` loads a named dataset, defined in `src/seeds/<name>.rs` with the same factories.
 
 ### Data at scale
 
