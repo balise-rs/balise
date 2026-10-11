@@ -148,7 +148,19 @@ Provided by the `auth` module.
 - Generated routes: sign up, sign in, sign out, current user, password reset, written in `src/auth/` so the agent can read and adapt them. Generated pages for each, when the project has a front end.
 - The `User` model is generated in `src/users/model.rs` and belongs to the application: the agent adds its own fields. `#[auth::user]` checks at compile time that the fields the module needs (`email`, `password_hash`) are present. A model provided by the module could not be extended, since Rust has no inheritance.
 - Passwords hashed with Argon2 (delegated crate). Sign-in attempts are rate-limited.
+- Sign-in goes through `User::authenticate(db, email, password)`, which gives the same error and the same response time whether the email exists or not (a dummy hash is checked when it does not).
+- Emails (password reset) go through the `mail` module. Without it, the `auth` module calls a hook that the application implements.
+- The current user's output is named `CurrentUserView`: `CurrentUser` is the extractor.
 - `CurrentUser` in a handler or channel returns the user or answers `401`.
+## Mail
+
+Provided by the `mail` module: a small sending interface with two implementations.
+
+- **In dev, mails are captured**, never sent. The page `/_balise/mails` and the `mails` MCP tool show them, so the agent can read the last mail and follow a reset link: it tests the whole flow on its own.
+- **In tests, mails are captured too**: `app.mails()` checks that a mail was sent and gives its links.
+- **In production, SMTP** through a delegated crate. Other providers come later.
+- `Mailer` is a handler parameter, like `Db`. In an open transaction, `mailer.send()` is deferred until the commit ([data.md](data.md#side-effects-after-commit)): no reset mail for a write that was rolled back.
+
 ## Open questions
  
 - Replacing TanStack Query with an in-house cache, once the adapter's API is stable.

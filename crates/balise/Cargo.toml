@@ -10,10 +10,11 @@ publish.workspace = true
 [features]
 orm = ["dep:balise-orm"]
 auth = ["dep:balise-auth"]
+mail = ["dep:balise-mail"]
 dev = ["dep:balise-dev"]
 # Test builds: counters for budgets.
 test = []
-full = ["orm", "auth"]
+full = ["orm", "auth", "mail"]
 
 [dependencies]
 balise-core.workspace = true
@@ -23,4 +24,5 @@ balise-realtime.workspace = true
 balise-ts.workspace = true
 balise-orm = { workspace = true, optional = true }
 balise-auth = { workspace = true, optional = true }
+balise-mail = { workspace = true, optional = true }
 balise-dev = { workspace = true, optional = true }

@@ -5,8 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-# Optional modules, all enabled by `balise new` unless refused (`--no-orm`, `--no-auth`).
-balise = { version = "0.1", features = ["orm", "auth"] }
+# Optional modules, all enabled by `balise new` unless refused (`--no-orm`, `--no-auth`, `--no-mail`).
+balise = { version = "0.1", features = ["orm", "auth", "mail"] }
 
 # Enabled by `balise dev` and `balise test`. A release build never has them.
 [features]

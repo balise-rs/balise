@@ -25,7 +25,7 @@ src/
 ```
  
 - Add a new resource with `balise generate resource <name>`: it creates the folder and declares its module in `main.rs`.
-- Do not create `controllers/`, `services/` or `utils/` folders.
+- Do not create `controllers/`, `services/` or `utils/` folders. A helper about one model is a method on it, in `model.rs`; a helper for the handlers stays in `mod.rs`, below them.
 - Routes are collected automatically. There is no router file to update: `main.rs` declares modules, not routes. A resource folder missing from `main.rs` is reported by `balise check`, since its routes would silently not exist.
 ## Starting the app
  
@@ -79,7 +79,7 @@ Declare what the handler needs as parameters. Balise provides them.
 | Parameter | Gives you |
 | --- | --- |
 | `Path<T>` | Path parameters. One `Path` per `{param}`, or a tuple: `Path<(ShopId, OrderId)>` |
-| `Query<T>` | Query string, parsed into an `Input` struct |
+| `Query<T>` | Query string, parsed into an `Input` struct. `Query<PageParams>` gives the pagination parameters |
 | `Body<T>` | JSON body, parsed into an `Input` struct |
 | `Db` | A database connection from the pool (requires the `orm` feature) |
 | `State<T>` | Shared state declared in `main.rs` |
@@ -194,12 +194,13 @@ if order.shipped {
  
 Available: `Error::bad_request`, `Error::forbidden`, `Error::not_found`, `Error::conflict`.
  
-For errors specific to your application, declare them once per resource:
+For errors specific to your application, declare them once per resource, in `api.rs`: their codes are part of the contract with the front end. Codes are a prefix and four digits.
  
 ```rust
+// src/orders/api.rs
 #[derive(AppError)]
 enum OrderError {
-    #[error(status = 409, code = "ORD001", fix = "Cancel the order before refunding it.")]
+    #[error(status = 409, code = "ORD0001", fix = "Cancel the order before refunding it.")]
     NotCancelled,
 }
 ```
@@ -235,15 +236,23 @@ async fn list(cache: State<PriceCache>) -> Result<Vec<PriceView>> { ... }
 ## Tests
  
 ```rust
+use balise::test::*;
+
 #[balise::test]
 async fn create_order_returns_201(app: TestApp) {
-    let res = app.post("/orders").json(json!({ "product_id": 1 })).send().await;
+    app.sign_in_as_new_user().await;
+    let res = app.post("/orders").body(CreateOrder::fake()).send().await;
     res.assert_status(201);
     res.assert_queries_at_most(3);
 }
 ```
  
 - Each test gets a fresh database.
+- Paths are written without the API prefix, as in route attributes: the test client adds it.
+- Request bodies are typed: an `Input` value or `CreateOrder::fake()`. `json!` (from `balise::test`) is only for invalid bodies, to test validation.
+- Check a response with its type first: `let order: OrderView = res.json(); assert_eq!(order.quantity, 2);`. A renamed field then breaks at compile time. For a partial check, `res.assert_json_includes(json!({ "quantity": 2 }))` ignores absent keys and compares the others.
+- `sign_in_as_new_user` exists when the `auth` module is enabled.
+- Mails are captured: `app.mails()` checks that a mail was sent and gives its links, as `/_balise/mails` does in dev.
 - `assert_queries_at_most` enforces a query budget for the route.
 ## Working loop
  

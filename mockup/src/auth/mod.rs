@@ -4,3 +4,63 @@
 mod api;
 #[cfg(test)]
 mod tests;
+
+use balise::auth::{Password, ResetToken, Session};
+use balise::mail::{Mail, Mailer};
+use balise::prelude::*;
+
+use crate::users::User;
+use api::{CurrentUserView, RequestPasswordReset, ResetPassword, SignIn, SignUp};
+
+#[post("/auth/sign-up")]
+async fn sign_up(input: Body<SignUp>, session: Session, db: Db) -> Result<Created<CurrentUserView>> {
+    let input = input.into_inner();
+    let user = User::create(db, |u| {
+        u.email = input.email;
+        u.password_hash = Password::hash(&input.password);
+    })
+    .await?;
+    session.sign_in(&user).await?;
+    Ok(Created(user.into()))
+}
+
+#[post("/auth/sign-in")]
+async fn sign_in(input: Body<SignIn>, session: Session, db: Db) -> Result<CurrentUserView> {
+    // Same error and same response time for an unknown email and a wrong password.
+    let user = User::authenticate(db, &input.email, &input.password).await?;
+    session.sign_in(&user).await?;
+    Ok(user.into())
+}
+
+#[post("/auth/sign-out")]
+async fn sign_out(session: Session) -> Result<NoContent> {
+    session.sign_out().await?;
+    Ok(NoContent)
+}
+
+#[get("/auth/me")]
+async fn me(user: CurrentUser, db: Db) -> Result<CurrentUserView> {
+    Ok(User::get(db, user.id).await?.into())
+}
+
+#[post("/auth/password-reset")]
+async fn request_password_reset(input: Body<RequestPasswordReset>, mailer: Mailer, db: Db) -> Result<NoContent> {
+    // Same answer whether the email has an account or not.
+    if let Some(user) = User::query().filter(|u| u.email.eq(&input.email)).first(db).await? {
+        let token = ResetToken::create(db, &user).await?;
+        let mail = Mail::to(&user.email)
+            .subject("Reset your password")
+            .text(format!("Choose a new password: {}", token.link("/password-reset")));
+        // Sent after the request's transaction commits; captured in dev (`/_balise/mails`).
+        mailer.send(mail)?;
+    }
+    Ok(NoContent)
+}
+
+#[post("/auth/password-reset/confirm")]
+async fn reset_password(input: Body<ResetPassword>, db: Db) -> Result<NoContent> {
+    let user_id = ResetToken::consume(db, &input.token).await?;
+    let user = User::get(db, user_id).await?;
+    user.update(db, |u| u.password_hash = Password::hash(&input.password)).await?;
+    Ok(NoContent)
+}

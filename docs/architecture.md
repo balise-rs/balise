@@ -49,7 +49,7 @@ Two separate worlds:
  
 - A **facade crate** is the project's only dependency. It re-exports the enabled modules.
 - The **`base`** profile (default) contains the core, the engine wrapper, realtime, and TypeScript types.
-- **Optional** modules (ORM, Auth, then others) are enabled one by one through Cargo features. The **`full`** profile enables them all.
+- **Optional** modules (ORM, Auth, Mail, then others) are enabled one by one through Cargo features. The **`full`** profile enables them all.
 - **Dev tooling** (MCP server, detailed instrumentation, detailed error pages) sits behind a `dev` feature that is absent from production builds.
 - The core never assumes an optional module is present; modules plug into it through extension points.
 → Details: [engine.md](engine.md)

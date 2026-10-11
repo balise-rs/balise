@@ -15,6 +15,7 @@ crates/
   balise-ts/        TypeScript type generation
   balise-orm/       ORM (feature `orm`)
   balise-auth/      auth (feature `auth`)
+  balise-mail/      mail (feature `mail`)
   balise-dev/       MCP, instrumentation (feature `dev`, never in prod)
   balise-cli/       the `balise` binary, installed on the host
 bench/              compile-time benchmark

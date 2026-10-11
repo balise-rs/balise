@@ -43,7 +43,7 @@ A code is an area prefix and four digits.
 | `PERF` | performance warnings (N+1, slow query, blocked event loop…) |
 | `EXT` | errors from outside Balise that it could not classify |
 
-Applications define their own codes with `#[derive(AppError)]` and their own prefix (`ORD001`), see [application.md](application.md#errors).
+Applications define their own codes with `#[derive(AppError)]` and their own prefix (`ORD0001`), see [application.md](application.md#errors).
 
 Rules:
 
@@ -116,6 +116,7 @@ The agent meets most errors at compile time. Balise improves them at four levels
    - unknown method or type: the closest Balise API, its doc, and the MCP tool to call;
    - "future is not Send": the variable held across `.await` and how to fix it;
    - a resource folder whose module is not declared in `main.rs`: its routes are never compiled, so nothing else would report them missing;
+   - a private field or type used from another module (E0616, E0603): the `pub` to add, and where;
    - every diagnostic gets a `CMP` code and the same rendering as runtime errors.
 4. **Generated lints.** The generated `Cargo.toml` turns `deprecated` and `clippy::await_holding_lock` into errors. `balise check` also rejects `static mut`, global mutable state, `std::sync::Mutex`, `RefCell`, `tokio::spawn` and `println!` in application code.
 

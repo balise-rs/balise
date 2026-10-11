@@ -51,6 +51,7 @@ Option A is the one implemented first.
 | 2026-10-10 | Columns loaded | Only those used by the `Output` | Whole row | Runtime | to test |
 | 2026-10-10 | Primary keys | UUIDv7, typed and prefixed | Auto-incremented integer | Runtime (index size, insert and join speed) | to test |
 | 2026-10-10 | Transactions | Lazy transaction per request | Explicit transactions only | Runtime (cost, lock duration), agents (missing transactions) | to test |
+| 2026-10-11 | Ownership enforcement | Compile-time `.owned_by()` in the ORM | Also PostgreSQL row-level security policies generated from `owned_by`, as defense in depth | Runtime (query cost), agents (bypasses caught) | to test |
 | 2026-10-10 | Test isolation | Fresh database per test, copied from a template | Transaction rolled back after each test | Runtime (test suite duration) | to test |
 
 ### Agent experience
@@ -60,6 +61,7 @@ Option A is the one implemented first.
 | 2026-10-10 | Hallucination traps | Hidden methods failing at compile time | Suggestions from `balise check` only | Agents | to test |
 | 2026-10-10 | Hook timing | `balise check` after each edit | Once at the end of a task | Agents (iterations, total time) | to test |
 | 2026-10-10 | Hook integration | `--hook` mode in the CLI, speaking each agent's hook protocol | Script in the project (`.claude/hooks/`) calling plain `balise check` | Agents (errors reaching the agent, false runs), on a real generated project | to test |
+| 2026-10-11 | Example resource in a new project | `orders` owned by the signed-in user, one model | (B) `orders` referencing a `Product` model, with a relation; (C) the relation shown in the docs only, not in the project | Agents: blind task "add a `Shop` that owns orders" on each variant, compare errors, invented names and conventions followed | to test |
 
 ### Environments and build
 

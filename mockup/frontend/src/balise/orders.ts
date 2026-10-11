@@ -2,11 +2,11 @@
 // Routes of src/orders/mod.rs
 
 import { route } from "./runtime";
-import type { CreateOrder, OrderId, OrderView, Page } from "./types";
+import type { CreateOrder, OrderFilters, OrderId, OrderView, Page, UpdateOrder } from "./types";
 
 export const orders = {
   /** GET /api/orders, cursor pagination (default 20, max 100) */
-  list: route<{ cursor?: string; perPage?: number }, Page<OrderView>>("GET", "/api/orders", {
+  list: route<OrderFilters & { cursor?: string; perPage?: number }, Page<OrderView>>("GET", "/api/orders", {
     pagination: "cursor",
   }),
   /** GET /api/orders/{id} */
@@ -16,4 +16,12 @@ export const orders = {
     input: "CreateOrder",
     maxBodySize: 2_000_000,
   }),
+  /** PATCH /api/orders/{id} */
+  update: route<{ id: OrderId; body: UpdateOrder }, OrderView>("PATCH", "/api/orders/{id}", {
+    input: "UpdateOrder",
+  }),
+  /** DELETE /api/orders/{id}, 204 */
+  delete: route<{ id: OrderId }, null>("DELETE", "/api/orders/{id}"),
+  /** POST /api/orders/{id}/cancel; ORD0001 when the order is not pending */
+  cancel: route<{ id: OrderId }, OrderView>("POST", "/api/orders/{id}/cancel"),
 };

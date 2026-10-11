@@ -2,17 +2,17 @@
 // Routes of src/auth/mod.rs. Sessions use HttpOnly cookies; the CSRF token is sent automatically.
 
 import { route } from "./runtime";
-import type { CurrentUser, SignIn, SignUp, RequestPasswordReset, ResetPassword } from "./types";
+import type { CurrentUserView, SignIn, SignUp, RequestPasswordReset, ResetPassword } from "./types";
 
 export const auth = {
   /** POST /api/auth/sign-up, 201 */
-  signUp: route<{ body: SignUp }, CurrentUser>("POST", "/api/auth/sign-up", { input: "SignUp" }),
+  signUp: route<{ body: SignUp }, CurrentUserView>("POST", "/api/auth/sign-up", { input: "SignUp" }),
   /** POST /api/auth/sign-in */
-  signIn: route<{ body: SignIn }, CurrentUser>("POST", "/api/auth/sign-in", { input: "SignIn" }),
+  signIn: route<{ body: SignIn }, CurrentUserView>("POST", "/api/auth/sign-in", { input: "SignIn" }),
   /** POST /api/auth/sign-out, 204 */
   signOut: route<{}, null>("POST", "/api/auth/sign-out"),
   /** GET /api/auth/me */
-  me: route<{}, CurrentUser>("GET", "/api/auth/me"),
+  me: route<{}, CurrentUserView>("GET", "/api/auth/me"),
   /** POST /api/auth/password-reset, 204 */
   requestPasswordReset: route<{ body: RequestPasswordReset }, null>("POST", "/api/auth/password-reset", {
     input: "RequestPasswordReset",

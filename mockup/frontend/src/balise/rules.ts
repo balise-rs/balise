@@ -6,4 +6,15 @@ export const rules = {
     quantity: { min: 1, max: 100, default: 1 },
     note: { length: { max: 500 } },
   },
+  UpdateOrder: {
+    quantity: { min: 1, max: 100 },
+    note: { length: { max: 500 } },
+  },
+  SignUp: {
+    email: { email: true, length: { max: 254 } },
+    password: { length: { min: 12, max: 128 } },
+  },
+  ResetPassword: {
+    password: { length: { min: 12, max: 128 } },
+  },
 } as const;

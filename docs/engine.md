@@ -34,6 +34,7 @@ balise-realtime   WebSocket, SSE, pub/sub
 balise-ts         TypeScript generation
 balise-orm        ORM                       feature `orm`
 balise-auth       authentication            feature `auth`
+balise-mail       sending mail              feature `mail`
 balise-dev        MCP, instrumentation      feature `dev`
 balise-cli        the `balise` binary       separate, installed on the host
 ```

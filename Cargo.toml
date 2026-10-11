@@ -17,4 +17,5 @@ balise-realtime = { path = "crates/balise-realtime" }
 balise-ts = { path = "crates/balise-ts" }
 balise-orm = { path = "crates/balise-orm" }
 balise-auth = { path = "crates/balise-auth" }
+balise-mail = { path = "crates/balise-mail" }
 balise-dev = { path = "crates/balise-dev" }

@@ -26,16 +26,7 @@ Done !
 Done !
 
 ### 2.2 Handler, model, Input and Output
-Write one complete resource the way an agent would: model, inputs, outputs, handlers, tests. This is where naming and conventions are checked against real code.
-- More: [application.md](application.md), [data.md](data.md#naming)
-
-```rust
-#[post("/shops/{shop_id}/orders")]
-async fn create(shop_id: Path<ShopId>, input: Body<CreateOrder>, db: Db) -> Result<Created<OrderView>> {
-    let order = Order::create(db, input).await?;
-    Ok(Created(order.into()))
-}
-```
+Done !
 
 ### 2.3 Reference project generator
 Turn the mock-up resource into a template, and write the script that generates the reference project from it (about 50 routes, 15 models). It does not compile yet; it is the target the core must make compile, and it changes whenever the mock-up does.
@@ -98,7 +89,7 @@ Implement graceful shutdown, `/health` and `/ready`, per-request panic handling 
 ## 4. CLI
 
 ### 4.1 `balise new`
-Generate a project from the templates, check git and Docker, initialize the repository and print the help prompts when a tool is missing. The generated project must run as is.
+Generate a project from the templates (with `--no-<module>` and `--no-example`), check git and Docker, initialize the repository and print the help prompts when a tool is missing. The generated project must run as is.
 - More: [agent-experience.md](agent-experience.md#prerequisites-at-balise-new)
 
 ### 4.2 `balise dev`
@@ -148,7 +139,7 @@ Implement `#[derive(Model)]`, typed prefixed UUIDv7 ids, timestamps, and the sch
 - To decide: database drivers, the first that works ([alternatives.md](alternatives.md))
 
 ### 6.2 Migrations
-Generate migrations from the snapshot diff, with three-step data migrations, `balise rename`, rename questions and `squash`. Show a summary before applying.
+Generate migrations from the snapshot diff, with three-step data migrations, `balise rename`, rename questions, draft migrations frozen by `balise build` (squash and resource removal rewrite drafts) and `balise remove resource`. Show a summary before applying.
 - More: [data.md](data.md#migrations-can-be-edited), [data.md](data.md#renames)
 
 ### 6.3 Queries and raw SQL

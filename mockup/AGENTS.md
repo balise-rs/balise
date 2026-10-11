@@ -50,7 +50,7 @@ frontend/src/
 
 ## This project
 
-Modules: `orm` (PostgreSQL), `auth` (cookie sessions). Front end: React.
+Modules: `orm` (PostgreSQL), `auth` (cookie sessions), `mail` (captured in dev: `/_balise/mails`). Front end: React.
 
 ## Debugging
 
