@@ -14,6 +14,9 @@ pub struct Config {
     /// The largest request body read, in bytes, for routes without files and without a
     /// `body_size` in `budgets.toml`.
     pub body_size: usize,
+    /// Whether error responses show location, fix and cause, and keep a `5xx` as it is. On in
+    /// dev only: they can reveal infrastructure details.
+    pub error_details: bool,
 }
 
 /// Where the API is served.
@@ -34,6 +37,7 @@ impl Default for Config {
                 version: None,
             },
             body_size: 2 * 1024 * 1024,
+            error_details: false,
         }
     }
 }

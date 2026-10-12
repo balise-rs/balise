@@ -144,11 +144,12 @@ Handlers are monomorphized up to extraction, then type-erased behind one boxed i
 - **A route's timeout cancels the handler.** A timeout is a cancellation: the transaction rolls back, but external calls already sent are not undone. Without that, the timeout would protect from nothing.
 ## Errors
  
-- One error type, `balise::Error`, carries an HTTP status, a stable code, a message, and the original cause.
+- One error type, `balise::Error`, carries an HTTP status, a stable code, a message, a fix, where it was raised in application code, and the original cause. It does not implement `std::error::Error`, so `?` converts any other error into it; the location comes from `#[track_caller]` on the conversion, without a backtrace.
+- Applications return their own errors only through `#[derive(AppError)]`: there are no ad hoc constructors (`Error::conflict("…")`), which would carry neither a code nor a fix. Two variants with the same code stop the startup (`HTTP0013`).
 - Codes are grouped by area: `HTTP`, `VAL` (validation), `DB`, `AUTH`, `CFG`, `EXT`; applications add their own through `#[derive(AppError)]`.
 - Errors from delegated dependencies that Balise recognizes (hyper, I/O, drivers) are converted to Balise errors with their own codes. Anything unrecognized becomes `EXT0001`, which keeps the original message.
 - Connection errors caused by the client (a closed connection, bytes that are not HTTP) are `debug` events with `HTTP0002`: they are not errors of the server.
-- In dev, error responses include the cause and the suggested fix. In prod, they include only a generic message and the request ID.
+- In dev, error responses include the location, the cause and the suggested fix. In prod, a `5xx` is a generic `HTTP0500` with the request ID, and the full error goes to the logs.
 Full error and log format: [errors-and-logs.md](errors-and-logs.md).
  
 ## Panics and supervision

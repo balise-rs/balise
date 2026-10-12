@@ -6,7 +6,7 @@ mod model;
 use balise::prelude::*;
 
 use api::{
-    CreateOrder, OrderDeleted, OrderFilters, OrderLineView, OrderList, OrderView, UpdateOrder,
+    CreateOrder, OrderError, OrderFilters, OrderLineView, OrderList, OrderView, UpdateOrder,
 };
 use model::Order;
 
@@ -31,31 +31,34 @@ async fn get(id: Path<u32>) -> OrderView {
 }
 
 #[post("/orders")]
-async fn create(input: Body<CreateOrder>) -> OrderView {
-    Order {
+async fn create(input: Body<CreateOrder>) -> Result<Created<OrderView>> {
+    let order = Order {
         quantity: input.quantity,
         note: input.note,
         contact: input.contact,
         ..Order::sample(1)
-    }
-    .into()
+    };
+    Ok(Created(order.into()))
 }
 
 #[patch("/orders/{id}")]
-async fn update(id: Path<u32>, input: Body<UpdateOrder>) -> OrderView {
+async fn update(id: Path<u32>, input: Body<UpdateOrder>) -> Result<OrderView> {
     let mut order = Order::sample(id);
+    if order.status == "cancelled" {
+        return Err(OrderError::Cancelled { id }.into());
+    }
     if let Patch::Set(quantity) = input.quantity {
         order.quantity = quantity;
     }
     if let Patch::Set(note) = input.note {
         order.note = note;
     }
-    order.into()
+    Ok(order.into())
 }
 
 #[delete("/orders/{id}")]
-async fn delete(id: Path<u32>) -> OrderDeleted {
-    OrderDeleted { id }
+async fn delete(_id: Path<u32>) -> NoContent {
+    NoContent
 }
 
 #[get("/orders/{order_id}/lines/{line}")]

@@ -147,7 +147,7 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
         fn #invoke(mut request: #private::Request) -> #private::ResponseFuture {
             ::std::boxed::Box::pin(async move {
                 #(#extractions)*
-                #private::respond::<#output>(#name(#(#values),*).await)
+                #private::respond::<#output>(#name(#(#values),*).await, &request)
             })
         }
 

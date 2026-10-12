@@ -1,0 +1,31 @@
+error: CMP0011: Invalid `AppError` declaration: the status is 503; an application error is a 4xx
+         fix: Write each variant as `#[error(status = 409, code = "ORD0001", message = "…", fix = "…")]`, with a 4xx status and a code made of your own prefix and four digits.
+         more: balise explain CMP0011
+ --> tests/ui/app_error_invalid.rs:5:22
+  |
+5 |     #[error(status = 503, code = "ORD0001", message = "Down", fix = "Wait.")]
+  |                      ^^^
+
+error: CMP0011: Invalid `AppError` declaration: the prefix `HTTP` is Balise's; use one of your own, like `ORD`
+         fix: Write each variant as `#[error(status = 409, code = "ORD0001", message = "…", fix = "…")]`, with a 4xx status and a code made of your own prefix and four digits.
+         more: balise explain CMP0011
+  --> tests/ui/app_error_invalid.rs:11:34
+   |
+11 |     #[error(status = 409, code = "HTTP0001", message = "Taken", fix = "Pick another.")]
+   |                                  ^^^^^^^^^^
+
+error: CMP0011: Invalid `AppError` declaration: `NotCancelled` has no `message`
+         fix: Write each variant as `#[error(status = 409, code = "ORD0001", message = "…", fix = "…")]`, with a 4xx status and a code made of your own prefix and four digits.
+         more: balise explain CMP0011
+  --> tests/ui/app_error_invalid.rs:17:7
+   |
+17 |     #[error(status = 409, code = "ORD0002", fix = "Cancel it first.")]
+   |       ^^^^^
+
+error: CMP0011: Invalid `AppError` declaration: `ORD0003` is used by two variants
+         fix: Write each variant as `#[error(status = 409, code = "ORD0001", message = "…", fix = "…")]`, with a 4xx status and a code made of your own prefix and four digits.
+         more: balise explain CMP0011
+  --> tests/ui/app_error_invalid.rs:25:34
+   |
+25 |     #[error(status = 409, code = "ORD0003", message = "B", fix = "B.")]
+   |                                  ^^^^^^^^^

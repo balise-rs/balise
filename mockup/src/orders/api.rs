@@ -27,7 +27,13 @@ pub struct OrderFilters {
 
 #[derive(AppError)]
 pub enum OrderError {
-    #[error(status = 409, code = "ORD0001", fix = "Only pending orders can be cancelled.")]
+    /// Cancelling is for orders not yet processed; a processed order goes through a return.
+    #[error(
+        status = 409,
+        code = "ORD0001",
+        message = "Only pending orders can be cancelled",
+        fix = "Check the order's status before cancelling it; a processed order needs a return."
+    )]
     NotPending,
 }
 

@@ -71,7 +71,7 @@ async fn get(id: Path<OrderId>, user: CurrentUser, db: Db) -> Result<OrderView> 
 - Path parameters are written `{name}` and read with `Path<T>`, in the order they appear.
 - Paths never include the API prefix: `#[get("/orders")]` is served at `/api/orders` by default. The prefix and an optional version are set once in `balise.toml` (`[api] prefix = "/api"`, `version = 1` for `/api/v1`).
 - A route lives in the resource of what it returns: `GET /shops/{shop_id}/orders` returns orders, so it goes in `orders/`. Its handler is named `<verb>_in_<parent>`: `list_in_shop`.
-- Every handler returns `Result<T>`, where `T` is a response type.
+- A handler returns a response type, or `Result<T>` when it can fail, which is almost always.
 - Handler names are short verbs; the folder gives the resource: `list`, `get`, `create`, `update`, `delete`, or a specific verb such as `cancel`. Logs, errors and MCP tools refer to a handler as `orders::create`.
 ### Parameters
  
@@ -161,6 +161,7 @@ struct OrderView {
 | `Page<T>` | `200` with a paginated list |
 | `Created<T>` | `201` with JSON |
 | `NoContent` | `204` |
+| `Result<T>` | the status of `T`, or the error's |
 | `Redirect` | `303` |
  
 Name outputs after the resource: `OrderView`, `OrderSummary`. TypeScript types are generated from every `Input` and `Output` ([web.md](web.md)).
@@ -198,29 +199,36 @@ async fn upload(input: Body<UploadVideo>, user: CurrentUser) -> Result<Created<V
 - Too large or wrong type: `413` or `415`, with the limit in the error message.
 ### Errors
  
-Use `?`. Errors from Balise (database, validation, not found…) are turned into the right HTTP response with their code.
- 
-To return an error yourself:
- 
-```rust
-if order.shipped {
-    return Err(Error::conflict("order already shipped"));
-}
-```
- 
-Available: `Error::bad_request`, `Error::forbidden`, `Error::not_found`, `Error::conflict`.
- 
-For errors specific to your application, declare them once per resource, in `api.rs`: their codes are part of the contract with the front end. Codes are a prefix and four digits.
- 
+Use `?`. Errors from Balise (database, validation, not found…) become the right HTTP response with their code. Any other error becomes a `500` (`EXT0001`) that keeps it as its cause.
+
+To return an error yourself, declare it once in the resource's `api.rs`: its code is part of the contract with the front end. Every error has a code, a message and a fix, so there is no error without them.
+
 ```rust
 // src/orders/api.rs
 #[derive(AppError)]
-enum OrderError {
-    #[error(status = 409, code = "ORD0001", fix = "Cancel the order before refunding it.")]
-    NotCancelled,
+pub enum OrderError {
+    /// Shown by `balise explain ORD0001`: why the rule exists.
+    #[error(status = 409, code = "ORD0001",
+            message = "Only pending orders can be cancelled",
+            fix = "Check the order's status before cancelling it.")]
+    NotPending,
+    #[error(status = 422, code = "ORD0002",
+            message = "An order has at most {max} lines",
+            fix = "Split the order: at most {max} lines each.")]
+    TooManyLines { max: u32 },
+}
+
+// src/orders/mod.rs
+if order.status != OrderStatus::Pending {
+    return Err(OrderError::NotPending.into());
 }
 ```
- 
+
+- `status` is a `4xx`: a `5xx` comes from a real failure, never from a choice of the application.
+- `code` is your own prefix (2 to 4 letters, not one of Balise's: `HTTP`, `VAL`, `DB`…) and four digits. A code is used once in the application.
+- `message` and `fix` can use the variant's fields: `{max}`.
+- The response and the logs give the place where the error was returned, in your code.
+
 They appear in logs and responses in the same format as Balise's own errors.
  
 ## Ownership

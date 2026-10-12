@@ -19,7 +19,7 @@ Everything Balise reports, at compile time or at runtime, follows one format tha
 | Title | `Query returned no row` |
 | Message | `No Order with id ord_01JB8XQ5` |
 | Location | `src/orders/mod.rs:27`, in `orders::get` |
-| Fix | `Return Error::not_found, or use Order::find if a missing row is expected.` |
+| Fix | `Use an id from GET /api/orders. If a missing row is expected, use Order::find, which returns an Option.` |
 | Doc | `balise explain DB0042` |
 | Request ID | `req_7f3a2c` (runtime errors only) |
 | Cause | the original error, kept in full |

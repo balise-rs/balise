@@ -149,4 +149,27 @@ The default limit of a route without files is set in `balise.toml`; `balise expl
 shows its value, and `balise routes` shows each route's limit and where it comes from.
 "#,
     }
+    HTTP0013 {
+        title: "Application error code declared twice",
+        message: "`{code}` is declared by two `AppError` variants: {first} and {second}",
+        fix: "Give one of the two variants another code: each code means one thing for the front end.",
+        explanation: r#"
+Application error codes are part of the contract with the front end, which may react to a
+code. Two variants with the same code would make it ambiguous, so the app does not start.
+Within one `AppError` enum, the derive already rejects it at compile time; this check
+covers codes declared in different enums.
+"#,
+    }
+    HTTP0500 {
+        title: "Internal error",
+        message: "Internal error",
+        fix: "Look up the request ID in the server logs: the error is logged there with its code, location and cause.",
+        explanation: r#"
+In production, a `5xx` response never shows its real code, message or cause: they may
+reveal infrastructure details (addresses, queries, file paths). The client gets this
+generic code with the request ID, and the server logs the full error under the same ID.
+
+In dev, the response keeps the real code, with its location, fix and cause.
+"#,
+    }
 }

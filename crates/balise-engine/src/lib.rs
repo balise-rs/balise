@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use balise_core::config::Config;
+use balise_core::error::Error;
+use balise_core::error_codes;
 use balise_core::error_codes::{
     EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007, HTTP0008,
     HTTP0009, HTTP0012,
@@ -39,6 +41,9 @@ const REPORT_PERIOD: Duration = Duration::from_secs(1);
 /// Builds the router from the registered routes, starts the runtime and serves. Never
 /// returns: on a fatal error, reports it and exits with a non-zero code.
 pub fn run(config: Config) -> ! {
+    if let Err(event) = error_codes::check_app_codes() {
+        fail(event);
+    }
     let server = match Router::build(registry::routes(), &config.api_base()) {
         Ok(router) => Arc::new(Server::new(router, &config)),
         Err(event) => fail(event),
@@ -163,6 +168,7 @@ impl Throttle {
 pub struct Server {
     router: Router,
     body_size: usize,
+    error_details: bool,
 }
 
 impl Server {
@@ -170,6 +176,7 @@ impl Server {
         Server {
             router,
             body_size: config.body_size,
+            error_details: config.error_details,
         }
     }
 }
@@ -205,8 +212,10 @@ pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
                         match tokio::spawn(handle(server, request, request_id)).await {
                             Ok(response) => response,
                             // Panics become proper crash reports later; for now, a plain 500.
-                            Err(_) => {
-                                handler::Response::error(500, EXT0001, "Internal error", &[], &id)
+                            Err(panic) => {
+                                Error::coded(500, EXT0001, &[("cause", "the handler panicked")])
+                                    .with_cause(format!("{panic:?}"))
+                                    .render(&id, false)
                             }
                         },
                     ))
@@ -227,6 +236,8 @@ async fn handle(
     request: Request<Incoming>,
     request_id: String,
 ) -> handler::Response {
+    let details = server.error_details;
+    let fail = |error: Error| error.render(&request_id, details);
     let (parts, body) = request.into_parts();
     let method = Method::parse(parts.method.as_str());
     let path = parts.uri.path();
@@ -240,14 +251,16 @@ async fn handle(
                 Ok(collected) => collected.to_bytes().to_vec(),
                 Err(error) if error.is::<LengthLimitError>() => {
                     let limit = format_size(server.body_size);
-                    let message = HTTP0012.format_message(&[("limit", &limit)]);
-                    return handler::Response::error(413, HTTP0012, &message, &[], &request_id);
+                    return fail(Error::coded(413, HTTP0012, &[("limit", &limit)]));
                 }
                 // The client closed the connection or sent a malformed body: it will most
                 // likely never read this answer.
                 Err(error) => {
-                    let message = HTTP0002.format_message(&[("cause", &error.to_string())]);
-                    return handler::Response::error(400, HTTP0002, &message, &[], &request_id);
+                    return fail(Error::coded(
+                        400,
+                        HTTP0002,
+                        &[("cause", &error.to_string())],
+                    ));
                 }
             };
             let headers = parts
@@ -265,26 +278,30 @@ async fn handle(
                 headers,
                 body,
                 request_id,
+                error_details: details,
             };
             (route.invoke)(request).await
         }
         Match::MethodNotAllowed { allowed } => {
             let allowed: Vec<&str> = allowed.iter().map(|m| m.as_str()).collect();
             let allowed = allowed.join(", ");
-            let message = HTTP0009.format_message(&[
-                ("method", parts.method.as_str()),
-                ("path", path),
-                ("allowed", &allowed),
-            ]);
-            let mut response = handler::Response::error(405, HTTP0009, &message, &[], &request_id);
+            let mut response = fail(Error::coded(
+                405,
+                HTTP0009,
+                &[
+                    ("method", parts.method.as_str()),
+                    ("path", path),
+                    ("allowed", &allowed),
+                ],
+            ));
             response.headers.push(("allow", allowed));
             response
         }
-        Match::NotFound => {
-            let message =
-                HTTP0003.format_message(&[("method", parts.method.as_str()), ("path", path)]);
-            handler::Response::error(404, HTTP0003, &message, &[], &request_id)
-        }
+        Match::NotFound => fail(Error::coded(
+            404,
+            HTTP0003,
+            &[("method", parts.method.as_str()), ("path", path)],
+        )),
     }
 }
 

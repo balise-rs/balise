@@ -7,6 +7,7 @@ use balise_core::error_codes::ErrorCode;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 
+mod app_error;
 mod input;
 mod output;
 mod route;
@@ -54,6 +55,13 @@ pub fn derive_input(item: TokenStream) -> TokenStream {
 #[proc_macro_derive(Output, attributes(output))]
 pub fn derive_output(item: TokenStream) -> TokenStream {
     derive(item, output::expand)
+}
+
+/// `#[derive(AppError)]`: an application's errors, each variant with its status, code,
+/// message and fix. `?` converts them into `balise::Error`.
+#[proc_macro_derive(AppError, attributes(error))]
+pub fn derive_app_error(item: TokenStream) -> TokenStream {
+    derive(item, app_error::expand)
 }
 
 fn derive(

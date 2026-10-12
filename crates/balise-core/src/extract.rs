@@ -7,10 +7,11 @@
 use std::fmt;
 use std::future::Future;
 
+use crate::error::Error;
 use crate::error_codes::{
     ErrorCode, HTTP0011, VAL0001, VAL0002, VAL0003, VAL0004, VAL0005, VAL0006, VAL0007,
 };
-use crate::handler::{FromRequest, Request, Response};
+use crate::handler::{FromRequest, Request};
 use crate::input::{Fields, Input};
 use crate::json;
 
@@ -119,11 +120,11 @@ integer_param!(i16, i32, i64, u8, u16, u32, u64);
 
 /// What a `Path` reads: one parameter, or a tuple of them.
 pub trait PathValue: Sized {
-    fn from_params(request: &mut Request) -> Result<Self, Response>;
+    fn from_params(request: &mut Request) -> Result<Self, Error>;
 }
 
 impl<T: FromParam> PathValue for T {
-    fn from_params(request: &mut Request) -> Result<Self, Response> {
+    fn from_params(request: &mut Request) -> Result<Self, Error> {
         next_param(request)
     }
 }
@@ -131,7 +132,7 @@ impl<T: FromParam> PathValue for T {
 macro_rules! tuple_path {
     ($($name:ident),*) => {
         impl<$($name: FromParam),*> PathValue for ($($name,)*) {
-            fn from_params(request: &mut Request) -> Result<Self, Response> {
+            fn from_params(request: &mut Request) -> Result<Self, Error> {
                 Ok(($(next_param::<$name>(request)?,)*))
             }
         }
@@ -142,7 +143,7 @@ tuple_path!(A, B);
 tuple_path!(A, B, C);
 tuple_path!(A, B, C, D);
 
-fn next_param<T: FromParam>(request: &mut Request) -> Result<T, Response> {
+fn next_param<T: FromParam>(request: &mut Request) -> Result<T, Error> {
     // The route macro checks that there is one `Path` value per parameter.
     let (name, value) = if request.params.is_empty() {
         (String::new(), String::new())
@@ -150,63 +151,60 @@ fn next_param<T: FromParam>(request: &mut Request) -> Result<T, Response> {
         request.params.remove(0)
     };
     T::from_param(&value).ok_or_else(|| {
-        let message = HTTP0011.format_message(&[
-            ("name", &name),
-            ("expected", T::EXPECTED),
-            ("value", &value),
-        ]);
-        Response::error(404, HTTP0011, &message, &[], &request.request_id)
+        Error::coded(
+            404,
+            HTTP0011,
+            &[
+                ("name", &name),
+                ("expected", T::EXPECTED),
+                ("value", &value),
+            ],
+        )
     })
 }
 
 impl<T: PathValue + Send> FromRequest for Path<T> {
-    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Response>> + Send {
+    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Error>> + Send {
         let value = T::from_params(request).map(Path);
         async move { value }
     }
 }
 
 impl<T: Input + Send> FromRequest for Query<T> {
-    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Response>> + Send {
+    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Error>> + Send {
         let value = T::from_fields(Fields::from_query(query_pairs(&request.query)))
             .map(Query)
-            .map_err(|fields| validation_failed(&fields, &request.request_id));
+            .map_err(validation_failed);
         async move { value }
     }
 }
 
 impl<T: Input + Send> FromRequest for Body<T> {
-    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Response>> + Send {
+    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Error>> + Send {
         let value = read_body(request).map(Body);
         async move { value }
     }
 }
 
-fn read_body<T: Input>(request: &Request) -> Result<T, Response> {
-    let id = &request.request_id;
+fn read_body<T: Input>(request: &Request) -> Result<T, Error> {
     if let Some(content_type) = request.header("content-type") {
         let essence = content_type.split(';').next().unwrap_or_default().trim();
         if !essence.eq_ignore_ascii_case("application/json") {
-            let message = VAL0003.format_message(&[("content_type", essence)]);
-            return Err(Response::error(415, VAL0003, &message, &[], id));
+            return Err(Error::coded(415, VAL0003, &[("content_type", essence)]));
         }
     }
-    let value = json::parse(&request.body).map_err(|cause| {
-        let message = VAL0002.format_message(&[("cause", &cause)]);
-        Response::error(400, VAL0002, &message, &[], id)
-    })?;
+    let value = json::parse(&request.body)
+        .map_err(|cause| Error::coded(400, VAL0002, &[("cause", &cause)]))?;
     let fields = Fields::from_json(value).map_err(|kind| {
         let cause = format!("expected an object, found {kind}");
-        let message = VAL0002.format_message(&[("cause", &cause)]);
-        Response::error(400, VAL0002, &message, &[], id)
+        Error::coded(400, VAL0002, &[("cause", &cause)])
     })?;
-    T::from_fields(fields).map_err(|fields| validation_failed(&fields, id))
+    T::from_fields(fields).map_err(validation_failed)
 }
 
-fn validation_failed(fields: &FieldErrors, request_id: &str) -> Response {
+fn validation_failed(fields: FieldErrors) -> Error {
     let names: Vec<&str> = fields.iter().map(|f| f.field.as_str()).collect();
-    let message = VAL0001.format_message(&[("names", &names.join(", "))]);
-    Response::error(422, VAL0001, &message, fields, request_id)
+    Error::coded(422, VAL0001, &[("names", &names.join(", "))]).with_fields(fields)
 }
 
 /// `a=1&b=x%20y` gives `("a", "1")` and `("b", "x y")`; `+` is a space.
@@ -239,7 +237,7 @@ impl fmt::Display for RequestId {
 }
 
 impl FromRequest for RequestId {
-    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Response>> + Send {
+    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Error>> + Send {
         let id = RequestId(request.request_id.clone());
         async move { Ok(id) }
     }
@@ -270,7 +268,9 @@ mod tests {
     #[test]
     fn an_invalid_path_value_is_a_404_naming_it() {
         let mut req = request(&[("id", "abc")]);
-        let response = u32::from_params(&mut req).unwrap_err();
+        let response = u32::from_params(&mut req)
+            .unwrap_err()
+            .render("req_000001", false);
         assert_eq!(response.status, 404);
         assert_eq!(
             String::from_utf8(response.body).unwrap(),

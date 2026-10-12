@@ -52,9 +52,7 @@ Done !
 Done !
 
 ### 3.4 Response and error format
-Map return types to statuses (`Created`, `NoContent`, `Page`…) and errors to the single error body. Implement `#[derive(AppError)]`. The response files of `mockup/outputs/` are checked end to end on the mock-up's routes.
-- More: [engine.md](engine.md#response-format), [application.md](application.md#errors)
-- `AppError` types do not implement `std::error::Error`, so `?` needs no specialization ([decisions.md](decisions.md))
+Done !
 
 ### 3.5 Logs and events
 Implement the event model, the dev and JSON renderings, the per-request summary and the redaction of sensitive data. Bridge `log` and capture dependency events. Every case of `mockup/outputs/` passes at the renderer level and end to end.
@@ -64,6 +62,7 @@ Implement the event model, the dev and JSON renderings, the per-request summary 
 ### 3.6 Configuration and environments
 Load configuration from environment variables and `balise.toml` with the dev / prod rules, and the `dev` feature guard. Add `balise config check`.
 - More: [engine.md](engine.md#configuration), [environments.md](environments.md#configuration)
+- `Config.error_details` (location, fix and cause in error responses, off by default) follows the environment: on in dev only
 
 ### 3.7 Shared state, blocking, spawn
 Implement `.state()`, `State<T>`, `Shared<T>`, `balise::blocking` and `balise::spawn`. Detect tasks that hold the event loop in dev.
@@ -151,6 +150,7 @@ Implement the closure-based query builder, the terminal methods and the `.limit(
 - More: [data.md](data.md#queries)
 - To decide: the verbs to read one row (`get`, `find`, `one`, `first`, `list`) ([data.md](data.md#open-questions))
 - The typestate tracks only boundedness; filters keep the type ([decisions.md](decisions.md))
+- The response files of `mockup/outputs/` (`DB0003`, `DB0042`), checked at the renderer level so far, are checked end to end on the mock-up's routes
 
 ```rust
 let orders = Order::query()
@@ -178,7 +178,7 @@ Implement the lazy transaction per request, deferred side effects, patch inputs,
 - Also: `Locked<Order>` from `.for_update()`, the deadlock code, `db.independent()` (queued on SQLite), the mail outbox, `db.after_commit`, `spawn(|db| …)` ([data.md](data.md#writes-and-transactions))
 
 ### 6.7 Pagination
-Implement cursor pagination by default and numbered pagination, totals, limits and their per-route override.
+Implement cursor pagination by default and numbered pagination, totals, limits and their per-route override, and `Page<T>` as a return type.
 - More: [data.md](data.md#pagination)
 
 ### 6.8 Factories and seeds

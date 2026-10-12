@@ -7,9 +7,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::error_codes::ErrorCode;
-use crate::extract::FieldError;
-use crate::json;
+use crate::error::Error;
 
 /// The parts of a request that handlers can read.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -25,6 +23,8 @@ pub struct Request {
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
     pub request_id: String,
+    /// Whether error responses show location, fix and cause (dev only).
+    pub error_details: bool,
 }
 
 impl Request {
@@ -53,40 +53,6 @@ impl Response {
             headers: vec![("content-type", "application/json".to_string())],
             body: body.into_bytes(),
         }
-    }
-
-    /// The single error body: `{"error": {"code", "message", "fields"?, "request_id"}}`.
-    /// `fields` holds one entry per field, `{"code", "message"}`, for validation errors only.
-    pub fn error(
-        status: u16,
-        code: &ErrorCode,
-        message: &str,
-        fields: &[FieldError],
-        request_id: &str,
-    ) -> Response {
-        let mut body = String::from(r#"{"error":{"code":"#);
-        json::write_string(&mut body, code.code());
-        body.push_str(r#","message":"#);
-        json::write_string(&mut body, message);
-        if !fields.is_empty() {
-            body.push_str(r#","fields":{"#);
-            for (i, field) in fields.iter().enumerate() {
-                if i > 0 {
-                    body.push(',');
-                }
-                json::write_string(&mut body, &field.field);
-                body.push_str(r#":{"code":"#);
-                json::write_string(&mut body, field.code.code());
-                body.push_str(r#","message":"#);
-                json::write_string(&mut body, &field.message);
-                body.push('}');
-            }
-            body.push('}');
-        }
-        body.push_str(r#","request_id":"#);
-        json::write_string(&mut body, request_id);
-        body.push_str("}}");
-        Response::json(status, body)
     }
 }
 
@@ -139,28 +105,32 @@ pub type HandlerFn = fn(Request) -> ResponseFuture;
     note = "more: balise explain CMP0006"
 )]
 pub trait FromRequest: Sized {
-    /// The value, or the response to send instead (a `422`, a `401`…).
-    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Response>> + Send;
+    /// The value, or the error to answer instead (a `422`, a `401`…).
+    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Error>> + Send;
 }
 
 /// Extracts one parameter. The route macro calls it once per parameter, so that a type
 /// Balise cannot provide is reported once, on the parameter itself.
 pub async fn extract<T: FromRequest>(request: &mut Request) -> Result<T, Response> {
-    T::from_request(request).await
+    match T::from_request(request).await {
+        Ok(value) => Ok(value),
+        Err(error) => Err(error.respond(request)),
+    }
 }
 
 /// Turns a handler's result into a response, reported on the return type when it cannot.
-pub fn respond<T: IntoResponse>(value: T) -> Response {
-    value.into_response()
+pub fn respond<T: IntoResponse>(value: T, request: &Request) -> Response {
+    value.into_response(request)
 }
 
 /// A handler's result, turned into a response.
 #[diagnostic::on_unimplemented(
     message = "CMP0007: `{Self}` cannot be returned from a handler",
     label = "not a response type",
-    note = "fix: Return a struct that derives `Output`, or a wrapper: `Created<T>`, `NoContent`, `Page<T>`.",
+    note = "fix: Return a struct that derives `Output`, a `Vec` of them, `Created<T>`, `NoContent` or `Redirect`, or a `Result` of one of these.",
     note = "more: balise explain CMP0007"
 )]
 pub trait IntoResponse {
-    fn into_response(self) -> Response;
+    /// The request gives errors their request ID and how much detail they show.
+    fn into_response(self, request: &Request) -> Response;
 }

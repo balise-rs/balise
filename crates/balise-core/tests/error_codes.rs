@@ -117,10 +117,14 @@ fn every_code_in_the_sources_is_registered() {
 }
 
 /// Two to four uppercase letters followed by four digits, such as `EXT0001`.
+/// A code of one of Balise's areas. Application codes (`ORD0001`) in examples and tests are
+/// not Balise's, and neither are stand-ins for areas that do not exist yet.
 fn looks_like_a_code(word: &str) -> bool {
     let letters = word.bytes().take_while(u8::is_ascii_uppercase).count();
-    let digits = &word[letters..];
-    (2..=4).contains(&letters) && digits.len() == 4 && digits.bytes().all(|b| b.is_ascii_digit())
+    let (prefix, digits) = word.split_at(letters);
+    AREAS.iter().any(|(area, _)| *area == prefix)
+        && digits.len() == 4
+        && digits.bytes().all(|b| b.is_ascii_digit())
 }
 
 fn collect_rust_files(dir: &Path, files: &mut Vec<PathBuf>) {

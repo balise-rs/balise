@@ -5,7 +5,7 @@
 
 use std::fmt::Write as _;
 
-use crate::handler::{IntoResponse, Response};
+use crate::handler::{IntoResponse, Request, Response};
 use crate::json;
 
 /// A struct that derives `Output`: returned by a handler, sent as JSON.
@@ -31,7 +31,7 @@ impl<T: Output> OutputValue for T {
 }
 
 impl<T: Output> IntoResponse for T {
-    fn into_response(self) -> Response {
+    fn into_response(self, _: &Request) -> Response {
         let mut body = String::new();
         Output::write_json(&self, &mut body);
         Response::json(200, body)

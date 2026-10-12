@@ -50,7 +50,12 @@ pub const AREAS: &[(&str, &[&ErrorCode])] = &[
     ("VAL", val::ALL),
 ];
 
-/// A registered error code. Only the registry can create one.
+/// Prefixes that applications cannot use: Balise's areas, present and planned.
+pub const RESERVED_PREFIXES: &[&str] = &[
+    "AUTH", "CFG", "CMP", "DB", "DEV", "EXT", "HTTP", "MAIL", "PERF", "VAL",
+];
+
+/// A registered error code. Only the registry and `AppError` can create one.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ErrorCode {
     code: &'static str,
@@ -61,6 +66,24 @@ pub struct ErrorCode {
 }
 
 impl ErrorCode {
+    /// An application's code, declared by `#[derive(AppError)]`.
+    #[doc(hidden)]
+    pub const fn app(
+        code: &'static str,
+        title: &'static str,
+        message: &'static str,
+        fix: &'static str,
+        explanation: &'static str,
+    ) -> ErrorCode {
+        ErrorCode {
+            code,
+            title,
+            message,
+            fix,
+            explanation,
+        }
+    }
+
     /// The code itself, such as `EXT0001`.
     pub fn code(&self) -> &'static str {
         self.code
@@ -123,7 +146,49 @@ pub fn all() -> impl Iterator<Item = &'static ErrorCode> {
     AREAS.iter().flat_map(|(_, codes)| codes.iter().copied())
 }
 
-/// Looks up a code, such as `EXT0001`.
+/// Looks up a code, such as `EXT0001` or an application's `ORD0001`.
 pub fn find(code: &str) -> Option<&'static ErrorCode> {
-    all().find(|c| c.code == code)
+    all()
+        .chain(app_codes().iter().copied())
+        .find(|c| c.code == code)
+}
+
+/// Every code declared by the application's `AppError` enums.
+pub fn app_codes() -> &'static [&'static ErrorCode] {
+    &APP_CODES
+}
+
+#[doc(hidden)]
+#[linkme::distributed_slice]
+pub static APP_CODES: [&'static ErrorCode];
+
+/// Registers an application's code. Used by `#[derive(AppError)]`, never written by hand.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __register_app_code {
+    ($name:ident, $code:expr) => {
+        #[$crate::registry::__linkme::distributed_slice($crate::error_codes::APP_CODES)]
+        #[linkme(crate = $crate::registry::__linkme)]
+        static $name: &$crate::error_codes::ErrorCode = $code;
+    };
+}
+
+/// Checked at startup: two `AppError` variants of different enums with the same code
+/// (`HTTP0013`). Within one enum, the derive rejects it at compile time.
+pub fn check_app_codes() -> Result<(), crate::event::Event> {
+    let codes = app_codes();
+    for (i, code) in codes.iter().enumerate() {
+        if let Some(other) = codes[i + 1..].iter().find(|c| c.code == code.code) {
+            return Err(crate::event::Event::coded(
+                crate::event::Level::Error,
+                HTTP0013,
+                &[
+                    ("code", code.code),
+                    ("first", &format!("`{}`", code.title)),
+                    ("second", &format!("`{}`", other.title)),
+                ],
+            ));
+        }
+    }
+    Ok(())
 }

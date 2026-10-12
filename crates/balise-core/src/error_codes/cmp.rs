@@ -67,10 +67,12 @@ A plain type such as `u32` or `CreateOrder` is wrapped: `Path<u32>`, `Body<Creat
     CMP0007 {
         title: "Not a handler result",
         message: "`{type}` cannot be returned from a handler",
-        fix: "Return a struct that derives `Output`, or a wrapper: `Created<T>`, `NoContent`, `Page<T>`.",
+        fix: "Return a struct that derives `Output`, a `Vec` of them, `Created<T>`, `NoContent` or `Redirect`, or a `Result` of one of these.",
         explanation: r#"
-A handler's return type decides the response: an `Output` is a `200` with JSON, `Created<T>`
-a `201`, `NoContent` a `204`. A model is never returned: convert it to its view with `.into()`.
+A handler's return type decides the response: an `Output` or a `Vec` of them is a `200`
+with JSON, `Created<T>` a `201`, `NoContent` a `204`, `Redirect` a `303`. A handler that can
+fail returns `Result<T>`, and its errors become the single error body. A model is never
+returned: convert it to its view with `.into()`.
 "#,
     }
     CMP0008 {
@@ -110,6 +112,26 @@ Every field of an `Input` is read from JSON or a query string, and every field o
 `f64` and `Vec` of them; in an `Input`, `Option<T>` for an optional field and `Patch<T>` for
 a partial update; in an `Output`, `Option<T>` (written `null`) and other structs that derive
 `Output`. Identifiers, enums and dates join the list with the models.
+"#,
+    }
+    CMP0011 {
+        title: "Invalid AppError declaration",
+        message: "Invalid `AppError` declaration: {reason}",
+        fix: "Write each variant as `#[error(status = 409, code = \"ORD0001\", message = \"…\", fix = \"…\")]`, with a 4xx status and a code made of your own prefix and four digits.",
+        explanation: r#"
+`#[derive(AppError)]` goes on an enum without generics, whose variants have no fields or
+named fields. Each variant has one `#[error(…)]` attribute with:
+
+- `status`: a `4xx`. A `5xx` comes from a real failure (a database down, a bug), never from
+  a choice of the application;
+- `code`: a prefix of 2 to 4 uppercase letters and four digits (`ORD0001`). The prefix is
+  the application's own: Balise's areas (`HTTP`, `VAL`, `DB`…) are reserved. A code is
+  used once;
+- `message`: what happened, for the client. Fields of the variant can be used in it:
+  `"At most {max} lines"`;
+- `fix`: what to do about it, in the same form.
+
+The doc comment of a variant becomes its explanation in `balise explain`.
 "#,
     }
 }

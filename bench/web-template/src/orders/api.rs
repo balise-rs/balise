@@ -50,7 +50,14 @@ pub struct OrderLineView {
     pub line: u32,
 }
 
-#[derive(Output)]
-pub struct OrderDeleted {
-    pub id: u32,
+#[derive(AppError)]
+pub enum OrderError {
+    /// Cancelled orders are kept for the history, and cannot change.
+    #[error(
+        status = 409,
+        code = "ORD0001",
+        message = "Order {id} is cancelled",
+        fix = "Create a new order instead of changing a cancelled one."
+    )]
+    Cancelled { id: u32 },
 }
