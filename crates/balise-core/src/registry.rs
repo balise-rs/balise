@@ -5,6 +5,7 @@
 //! before `main`), and only this module knows it: replacing it changes nothing elsewhere.
 
 use crate::handler::{HandlerFn, Method};
+use crate::state::StateKey;
 
 #[doc(hidden)]
 pub use linkme as __linkme;
@@ -22,6 +23,8 @@ pub struct Route {
     pub file: &'static str,
     pub line: u32,
     pub invoke: HandlerFn,
+    /// The shared state the handler reads with `State<T>`, checked at startup.
+    pub states: &'static [fn() -> StateKey],
 }
 
 impl Route {

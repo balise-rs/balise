@@ -40,18 +40,6 @@ fn main() {
 
 `balise::run!()` embeds `balise.toml`, which sits next to `Cargo.toml`, in the binary: a deployment needs nothing else, and environment variables override it. A missing, misplaced or malformed `balise.toml` is a compile error (`CMP0013`, `CMP0014`).
  
-If the app needs shared state, declare it here (see [Shared state](#shared-state)):
- 
-```rust
-mod prices;
-
-fn main() {
-    balise::app()
-        .state(PriceCache::new())
-        .run();
-}
-```
- 
 `main.rs` contains nothing else than module declarations and this call. Configuration comes from environment variables and `balise.toml`, not from code ([environments.md](environments.md#configuration)).
  
 ## Routes and handlers
@@ -85,7 +73,7 @@ Declare what the handler needs as parameters. Balise provides them.
 | `Query<T>` | Query string, parsed into an `Input` struct. `Query<PageParams>` gives the pagination parameters |
 | `Body<T>` | JSON body, parsed into an `Input` struct |
 | `Db` | A database connection from the pool (requires the `orm` feature) |
-| `State<T>` | Shared state declared in `main.rs` |
+| `State<T>` | Shared state, created at startup by a `#[balise::state]` function |
 | `CurrentUser` | The signed-in user, or a 401 (requires the `auth` feature) |
 | `RequestId` | The request identifier, as it appears in logs |
  
@@ -261,24 +249,54 @@ The application runs as one long-lived process. Values live for one of two durat
 | Lifetime | Examples | How |
 | --- | --- | --- |
 | Request | parameters, current user, a transaction | handler parameters |
-| Process | config, caches, clients for other services | declared in `main.rs`, read with `State<T>` |
+| Process | config, caches, clients for other services | created by a `#[balise::state]` function, read with `State<T>` |
  
 ```rust
-// main.rs
-balise::app().state(PriceCache::new()).run();
- 
-// prices/mod.rs
+// src/prices/mod.rs
+#[balise::state]
+fn price_cache() -> PriceCache {
+    PriceCache::new()
+}
+
 #[get("/prices")]
 async fn list(cache: State<PriceCache>) -> Result<Vec<PriceView>> { ... }
 ```
- 
-- State is read-only by default.
-- For state that changes, wrap it in `Shared<T>` and use `.write().await` / `.read().await`.
+
+- Declare state next to the resource that uses it, never in `main.rs`. The function takes no parameters; it may be `async` and return `Result<T>`, and an error stops the startup (`HTTP0016`).
+- Every `State<T>` a handler reads must have its function, and each type has one: both are checked at startup (`HTTP0014`, `HTTP0015`), never at the first request. Two values of the same type each get their own type: `struct BillingClient(Client)`.
+- State is read-only. For state that changes, create a `Shared<T>` and read it with `State<Shared<T>>`:
+
+```rust
+#[balise::state]
+fn visits() -> Shared<Visits> {
+    Shared::new(Visits::default())
+}
+
+#[post("/visits")]
+async fn visit(visits: State<Shared<Visits>>) -> Result<NoContent> {
+    visits.write().await.count += 1;   // .read().await to read
+    Ok(NoContent)
+}
+```
+
+- `Shared<T>` waits without blocking the server, and a panic while it is held does not break the requests that follow. Keep a `.write()` only for the change itself.
 - Never use `static mut`, global variables, `std::sync::Mutex` or `RefCell` in application code. `balise check` rejects them.
+
 ## Heavy work and background tasks
  
-- CPU-heavy work (image processing, large computations) goes in `balise::blocking(|| ...)`, which keeps the server responsive.
-- Work that continues after the response goes in `balise::spawn(|db| async move { ... })`, which logs failures in Balise's format. The task gets its own `db`: never use the request's.
+- CPU-heavy or blocking work (image processing, large computations, a synchronous library) goes in `balise::blocking(|| ...).await`, which keeps the server responsive and returns the closure's value. In dev, a handler or task that holds the event loop for more than 10 ms is reported (`PERF0002`).
+- Work that continues after the response goes in `balise::spawn`. A task is an `async move` closure whose parameters are services, like a handler's, and which returns `Result<()>`:
+
+```rust
+let order_id = order.id;   // values are captured with `move`
+balise::spawn(async move |cache: State<PriceCache>| {
+    cache.refresh(order_id).await?;
+    Ok(())
+});
+```
+
+- A task's logs carry the request that started it; an error or a panic is logged with the line of `spawn`. Its services are its own: with the `orm` module, `db: Db` is a new connection with the rules of a request, never the request's.
+- What comes from the request (the current user, the input) is not a service: capture it with `move`.
 - Work that must happen only if the request's writes are saved goes in `db.after_commit(async move { ... })`.
 - To change a row you read, lock it: `Order::get(db, id).owned_by(&user).for_update()`. Without the lock, `update` and `delete` do not compile ([data.md](data.md#locking-rows)).
 - Do not call `tokio::spawn` or `std::thread::spawn` directly.
@@ -336,4 +354,3 @@ Investigate through Balise, never in the framework's dependencies. Everything be
 ## Open questions
 
 From the review of the mock-up by agents (2026-10-11):
-- **Declaring shared state with `balise::run!()`**: the start is a macro, so the builder shown in [Starting the app](#starting-the-app) (`balise::app().state(…).run()`) cannot end with it as written.

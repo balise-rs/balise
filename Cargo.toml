@@ -38,5 +38,5 @@ syn = { version = "3.0.6", features = ["full"] }
 
 # Tests
 trybuild = "1.0.121"
-tokio = { version = "1.53", features = ["rt-multi-thread", "net", "time"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "net", "time", "sync"] }
 

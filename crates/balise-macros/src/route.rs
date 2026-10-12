@@ -58,6 +58,8 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
     let mut bodies = Vec::new();
     let mut path_values = 0;
     let mut types = Vec::new();
+    // The `T` of each `State<T>`, checked at startup.
+    let mut states = Vec::new();
     // `Path`, `Query` and `Body` give the value itself: true for each parameter to unwrap.
     let mut unwrap = Vec::new();
     for input in &function.sig.inputs {
@@ -73,6 +75,9 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
             Some(("Body", _)) => bodies.push(typed.ty.span()),
             Some(("Path", arity)) => path_values += arity,
             _ => {}
+        }
+        if let Some(state) = state_type(&typed.ty) {
+            states.push(state);
         }
         types.push(typed.ty.clone());
         unwrap.push(inner_value(&typed.ty).is_some());
@@ -159,6 +164,7 @@ fn expand(method: &str, attr: TokenStream2, item: TokenStream2) -> syn::Result<T
             file: ::core::file!(),
             line: ::core::line!(),
             invoke: #invoke,
+            states: &[#(#private::StateKey::of::<#states>),*],
         });
     })
 }
@@ -226,6 +232,22 @@ fn last_segment(ty: &Type) -> Option<(&'static str, usize)> {
         _ => 1,
     };
     Some((name, arity))
+}
+
+/// For `State<T>`, the `T`.
+fn state_type(ty: &Type) -> Option<Type> {
+    let Type::Path(path) = ty else { return None };
+    let segment = path.path.segments.last()?;
+    if segment.ident != "State" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(args) = &segment.arguments else {
+        return None;
+    };
+    match args.args.first()? {
+        GenericArgument::Type(inner) => Some(inner.clone()),
+        _ => None,
+    }
 }
 
 /// For `Path<T>`, `Query<T>` and `Body<T>`, the `T` the handler receives.

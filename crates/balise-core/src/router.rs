@@ -185,6 +185,7 @@ mod tests {
                 file: "src/orders/mod.rs",
                 line: 1,
                 invoke,
+                states: &[],
             }),*];
             Box::leak(routes.into_boxed_slice())
         }};

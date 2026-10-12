@@ -51,18 +51,18 @@ Rules:
 - CI runs `cargo hack check --feature-powerset --depth 2` plus a list of real-world combinations.
 ## Startup
  
-`balise::run()` and `balise::app().run()` do the following, in order:
+`balise::run!()` does the following, in order:
  
 1. Load configuration from environment variables and `balise.toml`, then validate it (see [Configuration](#configuration)).
 2. Install the log subscriber, including the `log` bridge, so every event uses Balise's format.
 3. In production, publish the crash report left by the previous run, if any.
 4. Build the routing table from the routes collected at compile time.
-5. Create shared state: database pool, declared `State` values, pub/sub hub.
+5. Create shared state: database pool, the values of `#[balise::state]` functions, pub/sub hub. Check that every `State<T>` a route reads exists.
 6. Apply pending migrations under a lock, or refuse to start, depending on configuration ([data.md](data.md)).
 7. Start listening, then report ready on `/ready`.
 The application is built once. Nothing above runs again per request.
 
-`balise::run()` is synchronous and never returns: it creates Tokio's multi-threaded runtime itself, so application code has no `#[tokio::main]` and no `Result` in `main`. A fatal error at startup (the port is taken: `HTTP0001`) is reported with its code, and the process exits with a non-zero code.
+`balise::run!()` is synchronous and never returns: it creates Tokio's multi-threaded runtime itself, so application code has no `#[tokio::main]` and no `Result` in `main`. A fatal error at startup (the port is taken: `HTTP0001`) is reported with its code, and the process exits with a non-zero code.
 
 The server speaks HTTP/1.1, what reverse proxies and the Vite proxy use towards the app. HTTP/2 comes with built-in TLS.
  
@@ -137,9 +137,9 @@ Handlers are monomorphized up to extraction, then type-erased behind one boxed i
  
 - One long-lived process, on Tokio's multi-threaded runtime.
 - Request-scoped values (parameters, connection, transaction) are dropped at the end of the request.
-- Process-scoped values (config, pool, state) live until shutdown. The framework wraps them in `Arc`; mutable state uses `Shared<T>`, backed by an async lock that is not poisoned by a panic.
-- `balise::blocking` runs CPU-heavy work on Tokio's blocking pool. Work cannot be moved off the event loop automatically: in dev, Balise detects tasks that hold the event loop for more than 10 ms and reports the handler.
-- `balise::spawn` runs background tasks and logs their failures. The task gets its own `Db`, with the same transaction rules as a request ([data.md](data.md#side-effects-after-commit)).
+- Process-scoped values (config, pool, state) live until shutdown. State is created at startup by `#[balise::state]` functions, registered like routes, and stored by type; every `State<T>` a route reads is checked before the server listens. Mutable state uses `Shared<T>`, backed by an async lock that is not poisoned by a panic.
+- `balise::blocking` runs CPU-heavy work on Tokio's blocking pool, with the request's context so its logs keep their request. Work cannot be moved off the event loop automatically: in dev, every poll of a handler or task is timed, and one longer than 10 ms is reported with the handler (`PERF0002`). The production binary has no such timing.
+- `balise::spawn` runs background tasks: an `async` closure whose parameters are services (`FromTask`, like `FromRequest` for handlers). It inherits the request's context for its logs; its error or panic is logged with the line of `spawn`. The task gets its own `Db`, with the same transaction rules as a request ([data.md](data.md#side-effects-after-commit)).
 - **A handler runs to the end even if the client disconnects**: hyper drops the future on disconnection, so Balise runs each handler in its own task, and only the response is discarded.
 - **A route's timeout cancels the handler.** A timeout is a cancellation: the transaction rolls back, but external calls already sent are not undone. Without that, the timeout would protect from nothing.
 ## Errors

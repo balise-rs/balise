@@ -36,12 +36,14 @@ mod cfg;
 mod cmp;
 mod ext;
 mod http;
+mod perf;
 mod val;
 
 pub use cfg::*;
 pub use cmp::*;
 pub use ext::*;
 pub use http::*;
+pub use perf::*;
 pub use val::*;
 
 /// Every area, with its prefix and its codes.
@@ -50,6 +52,7 @@ pub const AREAS: &[(&str, &[&ErrorCode])] = &[
     ("CMP", cmp::ALL),
     ("EXT", ext::ALL),
     ("HTTP", http::ALL),
+    ("PERF", perf::ALL),
     ("VAL", val::ALL),
 ];
 

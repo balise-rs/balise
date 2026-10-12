@@ -11,7 +11,7 @@ publish.workspace = true
 orm = ["dep:balise-orm"]
 auth = ["dep:balise-auth"]
 mail = ["dep:balise-mail"]
-dev = ["dep:balise-dev"]
+dev = ["dep:balise-dev", "balise-engine/dev"]
 # Test builds: counters for budgets.
 test = []
 full = ["orm", "auth", "mail"]

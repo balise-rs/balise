@@ -165,6 +165,37 @@ Within one `AppError` enum, the derive already rejects it at compile time; this 
 covers codes declared in different enums.
 "#,
     }
+    HTTP0014 {
+        title: "State not declared",
+        message: "No `#[balise::state]` creates `{type}`, which {reader} reads with `State<{type}>`",
+        fix: "Declare a function that creates it, next to the resource that uses it: `#[balise::state] fn …() -> {type} { … }`.",
+        explanation: r#"
+`State<T>` reads a value created once at startup by a function marked `#[balise::state]`.
+Balise checks at startup that every `State<T>` a handler reads has its function, so the app
+does not start with a handler that would always fail. A task that reads a state nobody
+declared gets this error when it runs.
+"#,
+    }
+    HTTP0015 {
+        title: "State declared twice",
+        message: "`{type}` is created by two `#[balise::state]` functions: {first} and {second}",
+        fix: "Keep one of the two functions: each type of state exists once. Wrap one of them in its own type if both are needed.",
+        explanation: r#"
+`State<T>` finds its value by type, so each type has one `#[balise::state]` function. Two
+values of the same type, such as two HTTP clients with different settings, each get their
+own type: `struct BillingClient(Client)`.
+"#,
+    }
+    HTTP0016 {
+        title: "State cannot be created",
+        message: "Cannot create the state `{type}`: {message}",
+        fix: "Fix what its `#[balise::state]` function reports: the cause and location say where it failed.",
+        explanation: r#"
+A `#[balise::state]` function returned an error at startup: a service it connects to is
+unreachable, a file it loads is missing… The app does not start without its state, rather
+than failing on every request that reads it.
+"#,
+    }
     HTTP0500 {
         title: "Internal error",
         message: "Internal error",

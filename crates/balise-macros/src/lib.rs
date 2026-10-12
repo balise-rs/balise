@@ -12,6 +12,7 @@ mod input;
 mod output;
 mod route;
 mod run;
+mod state;
 
 use route::route;
 
@@ -63,6 +64,21 @@ pub fn derive_output(item: TokenStream) -> TokenStream {
 #[proc_macro_derive(AppError, attributes(error))]
 pub fn derive_app_error(item: TokenStream) -> TokenStream {
     derive(item, app_error::expand)
+}
+
+/// `#[balise::state]`: a function that creates one value of shared state at startup, read
+/// with `State<T>` by handlers and tasks.
+#[proc_macro_attribute]
+pub fn state(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item = proc_macro2::TokenStream::from(item);
+    match state::expand(attr.into(), item.clone()) {
+        Ok(tokens) => tokens.into(),
+        // Keep the function, so the only error shown is ours.
+        Err(error) => {
+            let error = error.to_compile_error();
+            quote::quote!(#error #item).into()
+        }
+    }
 }
 
 /// Embeds the project's files and starts the app. Called by `balise::run!()`.

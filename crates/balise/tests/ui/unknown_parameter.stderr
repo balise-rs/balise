@@ -11,20 +11,12 @@ help: the trait `balise::__private::FromRequest` is not implemented for `CreateO
   | ^^^^^^^^^^^^^^^^^^
   = note: fix: Use `Path<T>`, `Query<T>`, `Body<T>`, `RequestId`, or a service such as `Db` or `CurrentUser`.
   = note: more: balise explain CMP0006
-help: the following other types implement trait `balise::__private::FromRequest`
- --> $WORKSPACE/crates/balise-core/src/extract.rs
-  |
-  | impl<T: PathValue + Send> FromRequest for Path<T> {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `balise::Path<T>`
-...
-  | impl<T: Input + Send> FromRequest for Query<T> {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Query<T>`
-...
-  | impl<T: Input + Send> FromRequest for Body<T> {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Body<T>`
-...
-  | impl FromRequest for RequestId {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RequestId`
+  = help: the following other types implement trait `balise::__private::FromRequest`:
+            Body<T>
+            Query<T>
+            RequestId
+            State<T>
+            balise::Path<T>
 note: required by a bound in `balise::__private::extract`
  --> $WORKSPACE/crates/balise-core/src/handler.rs
   |

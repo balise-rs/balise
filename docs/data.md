@@ -610,12 +610,12 @@ Each side effect is handled according to what losing it costs:
 | `channels.publish()` | after the commit, from memory | lost: realtime events are ephemeral, clients reload on reconnection |
 | `mailer.send()` | written to the `balise_outbox` table in the request's transaction, sent by a worker | kept: sent at least once |
 | `db.after_commit(async { … })` | after the commit; at the end of the request if no transaction was opened; dropped after a rollback | lost |
-| `balise::spawn(\|db\| async { … })` | at once, never deferred | lost |
+| `balise::spawn(async move \|db: Db\| { … })` | at once, never deferred | lost |
 
 - **`balise_outbox`** is an internal table managed by Balise: it appears in the snapshot and the migrations, and the agent never edits it. Mails are delivered at least once, with retries; each carries a stable `Message-ID`, so a resend can be recognized. With several instances, the worker claims mails with `FOR UPDATE SKIP LOCKED`.
 - `mailer.send()` returns an error only for an invalid address: sending happens later.
 - **Without the `orm` module**, there is no outbox: `mailer.send()` sends from memory after the request, and is lost on a crash. The durable integration compiles only when both `mail` and `orm` are enabled.
-- **`balise::spawn`** has the same meaning everywhere. Its task gets its own `Db` and follows the rules of a request: lazy transaction, committed if the future returns `Ok`, rolled back on `Err`. A request's `Db` used after its request ended returns an error with a code; `balise check` also warns when a closure passed to `spawn` captures the request's `db`.
+- **`balise::spawn`** has the same meaning everywhere. A task declares its services as parameters, like a handler (`async move |db: Db, mailer: Mailer| { … }`), and captures values with `move`. Its task gets its own `Db` and follows the rules of a request: lazy transaction, committed if the future returns `Ok`, rolled back on `Err`. A request's `Db` used after its request ended returns an error with a code; `balise check` also warns when a closure passed to `spawn` captures the request's `db`.
 - A durable job queue, built on the outbox, is a later module.
 
 ### Partial updates

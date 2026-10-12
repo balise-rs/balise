@@ -1,0 +1,15 @@
+error: CMP0015: Invalid `#[balise::state]` function: it takes no parameters; read other state with `State<T>` where it is used
+         fix: Write `#[balise::state] fn name() -> Type`: no parameters, a return type, `async` and `Result<Type>` allowed.
+         more: balise explain CMP0015
+ --> tests/ui/state_invalid.rs:4:10
+  |
+4 | fn cache(size: u32) -> Cache {
+  |          ^^^^
+
+error: CMP0015: Invalid `#[balise::state]` function: it returns the value it creates: `fn name() -> Type`
+         fix: Write `#[balise::state] fn name() -> Type`: no parameters, a return type, `async` and `Result<Type>` allowed.
+         more: balise explain CMP0015
+  --> tests/ui/state_invalid.rs:10:4
+   |
+10 | fn nothing() {}
+   |    ^^^^^^^

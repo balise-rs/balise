@@ -169,4 +169,28 @@ sense is checked when the app starts, by the rules of its environment (`CFG` cod
 by `config check`.
 "#,
     }
+    CMP0015 {
+        title: "Invalid state declaration",
+        message: "Invalid `#[balise::state]` function: {reason}",
+        fix: "Write `#[balise::state] fn name() -> Type`: no parameters, a return type, `async` and `Result<Type>` allowed.",
+        explanation: r#"
+A `#[balise::state]` function creates one value of shared state when the app starts. It
+takes no parameters and returns the value, or `Result<Type>` when creating it can fail; it
+may be `async`. Handlers and tasks read the value with `State<Type>`.
+
+For state that changes, return a `Shared<Type>` and read it with `State<Shared<Type>>`.
+"#,
+    }
+    CMP0016 {
+        title: "Not a task",
+        message: "This cannot be spawned as a task",
+        fix: "Pass an `async move` closure whose parameters are services (`State<T>`, and `Db` or `Mailer` with their modules) and whose body ends with `Ok(())`; capture other values with `move`.",
+        explanation: r#"
+`balise::spawn` takes an `async move` closure, with at most four parameters, that returns
+`Result<()>`, so that `?` works inside and errors are logged. Its parameters are services
+Balise provides, like a handler's: `async move |cache: State<PriceCache>| …`. What comes from
+the request (its body, its path, the current user) is not a service: copy it into the
+task with `move`.
+"#,
+    }
 }

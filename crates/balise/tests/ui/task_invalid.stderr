@@ -1,0 +1,37 @@
+error[E0277]: CMP0016: this cannot be spawned as a task
+  --> tests/ui/task_invalid.rs:9:19
+   |
+ 9 |       balise::spawn(async move |note: Body<Note>| {
+   |  _____-------------_^
+   | |     |
+   | |     required by a bound introduced by this call
+10 | |         let _ = note;
+11 | |         Ok(())
+12 | |     });
+   | |_____^ not a task
+   |
+   = help: the trait `balise_core::task::Task<_>` is not implemented for `{async closure@$DIR/tests/ui/task_invalid.rs:9:19: 9:48}`
+   = note: fix: Pass an `async move` closure whose parameters are services (`State<T>`, and `Db` or `Mailer` with their modules) and whose body ends with `Ok(())`; capture other values with `move`.
+   = note: more: balise explain CMP0016
+note: required by a bound in `balise::spawn`
+  --> $WORKSPACE/crates/balise-engine/src/tasks.rs
+   |
+   | pub fn spawn<Params>(task: impl Task<Params>) {
+   |                                 ^^^^^^^^^^^^ required by this bound in `spawn`
+
+error[E0277]: CMP0016: this cannot be spawned as a task
+  --> tests/ui/task_invalid.rs:13:19
+   |
+13 |     balise::spawn(async move || {});
+   |     ------------- ^^^^^^^^^^^^^^^^ not a task
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = help: the trait `balise_core::task::Task<_>` is not implemented for `{async closure@$DIR/tests/ui/task_invalid.rs:13:19: 13:32}`
+   = note: fix: Pass an `async move` closure whose parameters are services (`State<T>`, and `Db` or `Mailer` with their modules) and whose body ends with `Ok(())`; capture other values with `move`.
+   = note: more: balise explain CMP0016
+note: required by a bound in `balise::spawn`
+  --> $WORKSPACE/crates/balise-engine/src/tasks.rs
+   |
+   | pub fn spawn<Params>(task: impl Task<Params>) {
+   |                                 ^^^^^^^^^^^^ required by this bound in `spawn`

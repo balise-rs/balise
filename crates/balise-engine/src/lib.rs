@@ -4,8 +4,10 @@
 //! boundary into the facade: errors leave as Balise events with their codes.
 
 mod start;
+mod tasks;
 
 pub use start::start;
+pub use tasks::{Shared, SharedRead, SharedWrite, blocking, spawn};
 
 use std::convert::Infallible;
 use std::io;
@@ -27,6 +29,7 @@ use balise_core::handler::{self, Method};
 use balise_core::log::{self, RequestContext};
 use balise_core::registry::{self, Route};
 use balise_core::router::{Match, Router};
+use balise_core::state;
 use balise_core::text::format_size;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
@@ -64,6 +67,9 @@ pub fn run(config: Config) -> ! {
         ),
     };
     runtime.block_on(async {
+        if let Err(event) = state::create(&state::STATES, registry::routes()).await {
+            fail(event);
+        }
         match bind(&config.address()).await {
             Ok(listener) => serve(listener, server).await,
             Err(event) => fail(event),
@@ -224,7 +230,7 @@ pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
                         // Panics become proper crash reports later; for now, a plain 500.
                         Err(error) => {
                             let cause = match error.try_into_panic() {
-                                Ok(panic) => panic_message(&*panic),
+                                Ok(panic) => panic_message("the handler panicked", &*panic),
                                 Err(error) => error.to_string(),
                             };
                             let error =
@@ -279,20 +285,20 @@ fn log_request(
 }
 
 /// The text a panic was raised with.
-fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+fn panic_message(what: &str, panic: &(dyn std::any::Any + Send)) -> String {
     match (panic.downcast_ref::<&str>(), panic.downcast_ref::<String>()) {
-        (Some(text), _) => format!("the handler panicked: {text}"),
-        (_, Some(text)) => format!("the handler panicked: {text}"),
-        _ => "the handler panicked".to_string(),
+        (Some(text), _) => format!("{what}: {text}"),
+        (_, Some(text)) => format!("{what}: {text}"),
+        _ => what.to_string(),
     }
 }
 
 tokio::task_local! {
     /// The request the current task runs, for application logs.
-    static REQUEST: (String, &'static Route);
+    pub(crate) static REQUEST: (String, &'static Route);
 }
 
-fn current_request() -> Option<RequestContext> {
+pub(crate) fn current_request() -> Option<RequestContext> {
     REQUEST
         .try_with(|(request_id, route)| RequestContext {
             request_id: request_id.clone(),
@@ -349,9 +355,8 @@ async fn handle(
                 request_id: request_id.clone(),
                 error_details: details,
             };
-            let response = REQUEST
-                .scope((request_id, route), (route.invoke)(request))
-                .await;
+            let handler = tasks::watch((route.invoke)(request), "a handler");
+            let response = REQUEST.scope((request_id, route), handler).await;
             (response, Some(route))
         }
         Match::MethodNotAllowed { allowed } => {

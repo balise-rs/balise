@@ -61,11 +61,7 @@ Done !
 Done !
 
 ### 3.7 Shared state, blocking, spawn
-Implement `.state()`, `State<T>`, `Shared<T>`, `balise::blocking` and `balise::spawn`. Detect tasks that hold the event loop in dev.
-- More: [application.md](application.md#shared-state), [engine.md](engine.md#execution-model)
-- To decide: multi-threaded runtime or `spawn_local` per core ([alternatives.md](alternatives.md))
-- To decide: how state is declared now that the start is `balise::run!()` ([application.md](application.md#open-questions))
-- Handlers run in their own task, so a client disconnect does not cancel them; timeouts still do ([engine.md](engine.md#execution-model))
+Done !
 
 ### 3.8 Uploads and per-route limits
 Implement `File` fields, multipart parsing streamed to disk, type checks on content, and limits computed from declarations. Add per-route pagination limits on the same model. Read `budgets.toml`, embedded by `balise::run!()` like `balise.toml`, for per-route `body_size`; its test checks stay in 9.3.
@@ -175,6 +171,7 @@ Deduce relations from foreign keys, implement `.with()`, `get_many` and the load
 Implement the lazy transaction per request, deferred side effects, patch inputs, closure updates, atomic operations, bulk writes and upsert.
 - More: [data.md](data.md#writes-and-transactions)
 - `Patch<T>` exists; the `Input` derive generates `apply_to` for inputs with `#[input(model = …)]`
+- `Db` and `Mailer` become task services (`FromTask`), each task with its own connection
 - Also: `Locked<Order>` from `.for_update()`, the deadlock code, `db.independent()` (queued on SQLite), the mail outbox, `db.after_commit`, `spawn(|db| …)` ([data.md](data.md#writes-and-transactions))
 
 ### 6.7 Pagination
