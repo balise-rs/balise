@@ -64,9 +64,7 @@ Done !
 Done !
 
 ### 3.8 Uploads and per-route limits
-Implement `File` fields, multipart parsing streamed to disk, type checks on content, and limits computed from declarations. Add per-route pagination limits on the same model. Read `budgets.toml`, embedded by `balise::run!()` like `balise.toml`, for per-route `body_size`; its test checks stay in 9.3.
-- More: [application.md](application.md#files), [engine.md](engine.md#per-route-limits)
-- To handle: authentication and cheap extractors run before the body is read ([engine.md](engine.md#open-questions))
+Done !
 
 ### 3.9 Shutdown, health, panics
 Implement graceful shutdown, `/health` and `/ready`, per-request panic handling and crash reports. Fold framework frames in backtraces.
@@ -242,7 +240,7 @@ Report static candidates, promoted to warnings by `expected_rows` or by measurem
 - More: [data.md](data.md#expected-table-size)
 
 ### 9.3 Budgets
-Implement `budgets.toml`, query and size budgets failing tests, and approval for increases.
+Add `queries` and `response_size` to `budgets.toml` (which already holds `body_size` and `timeout`), budgets failing tests, and approval for increases.
 - More: [agent-experience.md](agent-experience.md#budgets)
 - Every test request checks its route's budget; no per-test assertion; raising a budget is a sensitive decision
 

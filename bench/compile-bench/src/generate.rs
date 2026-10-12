@@ -24,6 +24,10 @@ const WEB_TEMPLATE: &[(&str, &str)] = &[
         include_str!("../../web-template/balise.toml"),
     ),
     (
+        "../budgets.toml",
+        include_str!("../../web-template/budgets.toml"),
+    ),
+    (
         "orders/mod.rs",
         include_str!("../../web-template/src/orders/mod.rs"),
     ),
@@ -149,6 +153,7 @@ fn generate(mockup: &Path, out: &Path, resources: usize) -> Result<(), String> {
 
     write(&out.join("Cargo.toml"), &manifest(mockup)?)?;
     copy(&mockup.join("balise.toml"), &out.join("balise.toml"))?;
+    copy(&mockup.join("budgets.toml"), &out.join("budgets.toml"))?;
     write(&out.join("src/main.rs"), &main_rs(mockup, resources)?)?;
     for dir in ["users", "auth", "seeds"] {
         copy_dir(
@@ -458,7 +463,7 @@ mod tests {
     }
 
     #[test]
-    fn the_web_variant_has_six_routes_per_resource_and_its_markers() {
+    fn the_web_variant_has_seven_routes_per_resource_and_its_markers() {
         let project = std::env::temp_dir().join("compile-bench-tests/web");
         generate_web(&mockup(), &project, DEFAULT_RESOURCES).unwrap();
         let files = sources(&project);
@@ -467,7 +472,7 @@ mod tests {
             .iter()
             .map(|attribute| all.matches(attribute).count())
             .sum::<usize>();
-        assert_eq!(routes, 6 * DEFAULT_RESOURCES);
+        assert_eq!(routes, 7 * DEFAULT_RESOURCES);
         for marker in [BODY_MARKER, FIELD_MARKER, MODEL_MARKER] {
             assert_eq!(
                 all.matches(marker).count(),

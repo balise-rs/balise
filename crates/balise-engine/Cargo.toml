@@ -12,7 +12,7 @@ publish.workspace = true
 dev = []
 
 [dependencies]
-balise-core.workspace = true
+balise-core = { workspace = true, features = ["runtime"] }
 bytes.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true

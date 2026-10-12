@@ -7,10 +7,12 @@
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::body::RequestBody;
 use crate::error::Error;
+use crate::limits::Limits;
 
 /// The parts of a request that handlers can read.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Default)]
 pub struct Request {
     pub method: Method,
     /// The path without the API base: `/orders/ord_01JB…`.
@@ -21,7 +23,10 @@ pub struct Request {
     pub query: String,
     /// Header names in lowercase.
     pub headers: Vec<(String, String)>,
-    pub body: Vec<u8>,
+    /// Not read yet: `Body<T>` reads it, after every other parameter.
+    pub body: RequestBody,
+    /// The route's limits.
+    pub limits: Limits,
     pub request_id: String,
     /// Whether error responses show location, fix and cause (dev only).
     pub error_details: bool,

@@ -186,6 +186,8 @@ mod tests {
                 line: 1,
                 invoke,
                 states: &[],
+                files: &[],
+                page: None,
             }),*];
             Box::leak(routes.into_boxed_slice())
         }};

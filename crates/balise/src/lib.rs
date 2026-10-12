@@ -4,7 +4,9 @@
 pub mod prelude {
     pub use balise_core::error::{Error, Result};
     pub use balise_core::extract::{Body, Path, Query, RequestId};
+    pub use balise_core::file::File;
     pub use balise_core::input::Patch;
+    pub use balise_core::page::PageParams;
     pub use balise_core::response::{Created, NoContent, Redirect};
     pub use balise_core::state::State;
     pub use balise_engine::Shared;
@@ -13,7 +15,9 @@ pub mod prelude {
 
 pub use balise_core::error::{Error, Result};
 pub use balise_core::extract::{Body, Path, Query, RequestId};
+pub use balise_core::file::{File, StoredFile};
 pub use balise_core::input::Patch;
+pub use balise_core::page::PageParams;
 pub use balise_core::response::{Created, NoContent, Redirect};
 pub use balise_core::state::State;
 pub use balise_engine::{Shared, SharedRead, SharedWrite, blocking, spawn};
@@ -29,8 +33,9 @@ pub use balise_macros::{AppError, Input, Output, delete, get, patch, post, put};
 /// }
 /// ```
 ///
-/// It embeds the project's configuration (`balise.toml`, next to `Cargo.toml`) in the binary,
-/// so that a deployment needs nothing else; environment variables override it. It never
+/// It embeds the project's configuration (`balise.toml`, next to `Cargo.toml`) and its
+/// budgets (`budgets.toml`, optional) in the binary, so that a deployment needs nothing else;
+/// environment variables override the configuration. It never
 /// returns: if the app cannot start (an invalid setting, the port is taken…), the error is
 /// reported with its code and the process exits.
 ///
@@ -113,13 +118,15 @@ pub mod __private {
     pub use balise_core::error_codes::ErrorCode;
     pub use balise_core::event::Level;
     pub use balise_core::extract::{FieldError, FieldErrors, FromParam};
+    pub use balise_core::file::FileSpec;
     pub use balise_core::handler::{
         FromRequest, IntoResponse, Method, Request, Response, ResponseFuture, extract, respond,
     };
-    pub use balise_core::input::{Fields, Input, InputField, InputValue, rules};
+    pub use balise_core::input::{Fields, FileField, Input, InputField, InputValue, rules};
     pub use balise_core::json::{Number, Value};
     pub use balise_core::log::{LogValue, app as log_app};
     pub use balise_core::output::{Output, OutputValue, write_field};
+    pub use balise_core::page::PageDeclared;
     pub use balise_core::registry::{Route, routes};
     pub use balise_core::state::{StateFuture, StateInit, StateKey, erase};
     pub use balise_core::{__register_app_code, __register_route};

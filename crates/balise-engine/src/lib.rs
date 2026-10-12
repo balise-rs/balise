@@ -12,28 +12,32 @@ pub use tasks::{Shared, SharedRead, SharedWrite, blocking, spawn};
 use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use balise_core::body::{BodySource, Progress, RequestBody};
 use balise_core::config::Config;
 use balise_core::error::Error;
 use balise_core::error_codes;
 use balise_core::error_codes::{
     EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007, HTTP0008,
-    HTTP0009, HTTP0012,
+    HTTP0009, HTTP0017, HTTP0018,
 };
 use balise_core::event::{Event, Level, RequestLine};
 use balise_core::handler::{self, Method};
+use balise_core::limits::RouteLimits;
 use balise_core::log::{self, RequestContext};
 use balise_core::registry::{self, Route};
 use balise_core::router::{Match, Router};
 use balise_core::state;
-use balise_core::text::format_size;
+use balise_core::text::format_duration;
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
-use hyper::body::Incoming;
+use http_body_util::Full;
+use hyper::body::{Body as _, Incoming};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
@@ -46,14 +50,15 @@ const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 /// At most one report per period for the same accept error, with the number of occurrences.
 const REPORT_PERIOD: Duration = Duration::from_secs(1);
 
-/// Builds the router from the registered routes, starts the runtime and serves. Never
-/// returns: on a fatal error, reports it and exits with a non-zero code.
-pub fn run(config: Config) -> ! {
+/// Builds the router from the registered routes, starts the runtime and serves, with each
+/// route's limits. Never returns: on a fatal error, reports it and exits with a non-zero code.
+pub fn run(config: Config, limits: RouteLimits) -> ! {
     if let Err(event) = error_codes::check_app_codes() {
         fail(event);
     }
+    balise_core::file::set_storage(&config.storage_dir);
     let server = match Router::build(registry::routes(), &config.api_base()) {
-        Ok(router) => Arc::new(Server::new(router, &config)),
+        Ok(router) => Arc::new(Server::with_limits(router, &config, limits)),
         Err(event) => fail(event),
     };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -179,16 +184,48 @@ impl Throttle {
 #[derive(Debug)]
 pub struct Server {
     router: Router,
-    body_size: usize,
+    limits: RouteLimits,
     error_details: bool,
 }
 
 impl Server {
+    /// A server whose routes have the limits their declarations and `config` give, without
+    /// `budgets.toml`.
     pub fn new(router: Router, config: &Config) -> Server {
+        // Without budgets, nothing can be wrong.
+        let limits = RouteLimits::resolve(registry::routes(), config, "")
+            .unwrap_or_else(|_| unreachable!("limits without budgets always resolve"));
+        Server::with_limits(router, config, limits)
+    }
+
+    pub fn with_limits(router: Router, config: &Config, limits: RouteLimits) -> Server {
         Server {
             router,
-            body_size: config.body_size,
+            limits,
             error_details: config.error_details,
+        }
+    }
+}
+
+/// The body of a hyper request, read by Balise's extractors.
+struct HyperBody(Incoming);
+
+impl BodySource for HyperBody {
+    fn poll_chunk(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Vec<u8>, String>>> {
+        loop {
+            return match Pin::new(&mut self.0).poll_frame(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(None) => Poll::Ready(None),
+                Poll::Ready(Some(Err(error))) => Poll::Ready(Some(Err(error.to_string()))),
+                Poll::Ready(Some(Ok(frame))) => match frame.into_data() {
+                    Ok(data) => Poll::Ready(Some(Ok(data.to_vec()))),
+                    // Trailers carry no body.
+                    Err(_) => continue,
+                },
+            };
         }
     }
 }
@@ -324,20 +361,9 @@ async fn handle(
             params,
             path,
         } => {
-            let body = match Limited::new(body, server.body_size).collect().await {
-                Ok(collected) => collected.to_bytes().to_vec(),
-                Err(error) if error.is::<LengthLimitError>() => {
-                    let limit = format_size(server.body_size);
-                    let error = Error::coded(413, HTTP0012, &[("limit", &limit)]);
-                    return (error.into_response(&request_id, details), Some(route));
-                }
-                // The client closed the connection or sent a malformed body: it will most
-                // likely never read this answer.
-                Err(error) => {
-                    let error = Error::coded(400, HTTP0002, &[("cause", &error.to_string())]);
-                    return (error.into_response(&request_id, details), Some(route));
-                }
-            };
+            let limits = server.limits.get(route);
+            let body = RequestBody::new(HyperBody(body), limits.body_size);
+            let progress = body.progress();
             let headers = parts
                 .headers
                 .iter()
@@ -352,11 +378,26 @@ async fn handle(
                 query: parts.uri.query().unwrap_or_default().to_string(),
                 headers,
                 body,
+                limits,
                 request_id: request_id.clone(),
                 error_details: details,
             };
             let handler = tasks::watch((route.invoke)(request), "a handler");
-            let response = REQUEST.scope((request_id, route), handler).await;
+            let handler = REQUEST.scope((request_id.clone(), route), handler);
+            // A timeout cancels the handler, reading of the body included.
+            let response = match tokio::time::timeout(limits.timeout, handler).await {
+                Ok(response) => response,
+                Err(_) => {
+                    let timeout = format_duration(limits.timeout);
+                    let handler = route.handler_name();
+                    let args = [("timeout", timeout.as_str()), ("handler", handler.as_str())];
+                    let error = match progress.get() {
+                        Progress::Reading => Error::coded(408, HTTP0017, &args),
+                        Progress::Waiting | Progress::Done => Error::coded(503, HTTP0018, &args),
+                    };
+                    error.into_response(&request_id, details)
+                }
+            };
             (response, Some(route))
         }
         Match::MethodNotAllowed { allowed } => {

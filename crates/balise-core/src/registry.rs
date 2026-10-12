@@ -4,7 +4,9 @@
 //! The mechanism is delegated to `linkme` (a static array filled by the linker, nothing runs
 //! before `main`), and only this module knows it: replacing it changes nothing elsewhere.
 
+use crate::file::FileSpec;
 use crate::handler::{HandlerFn, Method};
+use crate::page::PageDeclared;
 use crate::state::StateKey;
 
 #[doc(hidden)]
@@ -25,6 +27,10 @@ pub struct Route {
     pub invoke: HandlerFn,
     /// The shared state the handler reads with `State<T>`, checked at startup.
     pub states: &'static [fn() -> StateKey],
+    /// The `File` fields of its `Body`, which set its body limit and timeout.
+    pub files: &'static [FileSpec],
+    /// Its page sizes, when it reads `PageParams`.
+    pub page: Option<PageDeclared>,
 }
 
 impl Route {

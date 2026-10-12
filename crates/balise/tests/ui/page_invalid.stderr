@@ -1,0 +1,15 @@
+error: CMP0018: Invalid `page(…)` on `export`: `default` (500) is above `max` (100)
+         fix: Write `page(default = 50, max = 500)` with whole numbers from 1, `default` at most `max`, on a handler that reads `page: PageParams`.
+         more: balise explain CMP0018
+ --> tests/ui/page_invalid.rs:8:19
+  |
+8 | #[get("/exports", page(default = 500, max = 100))]
+  |                   ^^^^
+
+error: CMP0018: Invalid `page(…)` on `list`: the handler does not read `page: PageParams`
+         fix: Write `page(default = 50, max = 500)` with whole numbers from 1, `default` at most `max`, on a handler that reads `page: PageParams`.
+         more: balise explain CMP0018
+  --> tests/ui/page_invalid.rs:13:18
+   |
+13 | #[get("/orders", page(max = 50))]
+   |                  ^^^^

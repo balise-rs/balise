@@ -1,4 +1,4 @@
-error: CMP0008: Invalid `Input` declaration: unknown attribute `minimum`; expected one of `min`, `max`, `length(min = …, max = …)`, `email`, `url`, `one_of("a", "b")`, `default = …`, `secret`
+error: CMP0008: Invalid `Input` declaration: unknown attribute `minimum`; expected one of `min`, `max`, `length(min = …, max = …)`, `email`, `url`, `one_of("a", "b")`, `default = …`, `secret`, and for files `max_size = …`, `types(…)`, `max_count = …`
          fix: Derive on a struct with named fields and no generics, and use only the attributes listed by `balise explain CMP0008`.
          more: balise explain CMP0008
  --> tests/ui/input_bad_attribute.rs:5:13

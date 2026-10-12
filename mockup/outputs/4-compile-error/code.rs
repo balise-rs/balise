@@ -2,7 +2,7 @@
 // The agent forgot `user: CurrentUser` and `.owned_by(&user)`.
 
 #[get("/orders")]
-async fn list(filters: Query<OrderFilters>, page: Query<PageParams>, db: Db) -> Result<Page<OrderView>> {
+async fn list(filters: Query<OrderFilters>, page: PageParams, db: Db) -> Result<Page<OrderView>> {
     let mut query = Order::query()
         .order_by(|o| o.created_at.desc());
     if let Some(status) = filters.status {

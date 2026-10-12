@@ -25,8 +25,14 @@ pub struct UpdateOrder {
 pub struct OrderFilters {
     #[input(one_of("pending", "cancelled"))]
     pub status: Option<String>,
-    #[input(default = 20, min = 1, max = 100)]
-    pub per_page: u32,
+}
+
+#[derive(Input)]
+pub struct AttachReceipt {
+    #[input(length(max = 100))]
+    pub label: Option<String>,
+    #[input(max_size = "5MB", types("application/pdf", "image/png", "image/jpeg"))]
+    pub receipt: File,
 }
 
 #[derive(Output)]
@@ -42,6 +48,14 @@ pub struct OrderView {
 #[derive(Output)]
 pub struct OrderList {
     pub items: Vec<OrderView>,
+}
+
+#[derive(Output)]
+pub struct ReceiptView {
+    pub order_id: u32,
+    pub label: Option<String>,
+    pub path: String,
+    pub size: u64,
 }
 
 #[derive(Output)]

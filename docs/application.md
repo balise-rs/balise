@@ -38,7 +38,7 @@ fn main() {
 }
 ```
 
-`balise::run!()` embeds `balise.toml`, which sits next to `Cargo.toml`, in the binary: a deployment needs nothing else, and environment variables override it. A missing, misplaced or malformed `balise.toml` is a compile error (`CMP0013`, `CMP0014`).
+`balise::run!()` embeds `balise.toml` and `budgets.toml`, which sit next to `Cargo.toml`, in the binary: a deployment needs nothing else, and environment variables override the configuration. Both files are required, and may hold only comments: `balise new` creates them. A missing, misplaced or malformed one is a compile error (`CMP0013`, `CMP0014`).
  
 `main.rs` contains nothing else than module declarations and this call. Configuration comes from environment variables and `balise.toml`, not from code ([environments.md](environments.md#configuration)).
  
@@ -70,14 +70,15 @@ Declare what the handler needs as parameters. Balise provides them.
 | Parameter | Gives you |
 | --- | --- |
 | `Path<T>` | Path parameters. One `Path` per `{param}`, or a tuple: `Path<(ShopId, OrderId)>` |
-| `Query<T>` | Query string, parsed into an `Input` struct. `Query<PageParams>` gives the pagination parameters |
-| `Body<T>` | JSON body, parsed into an `Input` struct |
+| `Query<T>` | Query string, parsed into an `Input` struct |
+| `Body<T>` | JSON body, parsed into an `Input` struct; `multipart/form-data` when it has [files](#files) |
+| `PageParams` | The page a client asks for (`per_page`, `cursor`, `page`), within the route's limits |
 | `Db` | A database connection from the pool (requires the `orm` feature) |
 | `State<T>` | Shared state, created at startup by a `#[balise::state]` function |
 | `CurrentUser` | The signed-in user, or a 401 (requires the `auth` feature) |
 | `RequestId` | The request identifier, as it appears in logs |
  
-At most one `Body` per handler. The order of parameters does not matter.
+At most one `Body` per handler. The order of parameters does not matter: the body is always read last, so a request that another parameter rejects (a wrong path, a missing user) is answered without reading it.
 
 `Path`, `Query` and `Body` give you the value itself: in the handler, `id: Path<OrderId>` is an `OrderId` and `input: Body<CreateOrder>` is a `CreateOrder`. Use them directly, and move their fields out: no `*id`, no `.into_inner()`, no `.clone()`. Several path parameters can be read in one tuple and destructured: `(shop_id, id): Path<(ShopId, OrderId)>`. `Db`, `State<T>`, `CurrentUser` and `RequestId` are services, used as they are.
 
@@ -161,33 +162,39 @@ The response body is the `Output` as plain JSON: fields in declaration order, un
  
 Success or failure is never written by hand in the body. The HTTP status carries it, and the generated TypeScript client turns every call into `{ ok: true, data }` or `{ ok: false, error }` for the front end.
  
-Lists must be paginated: return `Page<T>` rather than an unbounded `Vec<T>`. Pages hold 20 items by default and 100 at most; a route that needs other limits declares them: `#[get("/exports/orders", page(default = 500, max = 5000))]`. Details in [data.md](data.md#pagination).
+Lists must be paginated: read `page: PageParams` and return `Page<T>` rather than an unbounded `Vec<T>`. Pages hold `pagination.per_page` items by default (20) and `pagination.max_per_page` at most (100); a larger `per_page` sent by a client is lowered to the maximum. A route that needs other limits declares them on its attribute, which is an error on a handler without `PageParams` (`CMP0018`): `#[get("/exports/orders", page(default = 500, max = 5000))]`. Details in [data.md](data.md#pagination).
  
 ### Files
  
 A route that accepts files declares them as fields of its `Input`, with their size and type. That declaration is the only place the limit is set.
  
 ```rust
+// src/videos/api.rs
 #[derive(Input)]
-struct UploadVideo {
-    title: String,
-    #[input(file, max_size = "5GB", types("video/mp4", "video/webm"))]
-    video: File,
+pub struct UploadVideo {
+    pub title: String,
+    #[input(max_size = "5GB", types("video/mp4", "video/webm"))]
+    pub video: File,
+    #[input(max_size = "5MB", types("image/png", "image/jpeg"), max_count = 4)]
+    pub thumbnails: Vec<File>,
 }
  
 // src/videos/mod.rs
 #[post("/videos")]
-async fn upload(input: Body<UploadVideo>, user: CurrentUser) -> Result<Created<VideoView>> {
-    let stored = input.video.store("videos").await?;
+async fn upload(user: CurrentUser, input: Body<UploadVideo>) -> Result<Created<VideoView>> {
+    let stored = input.video.store("videos").await?;   // `videos/3f9c….mp4`, under `storage.dir`
     ...
 }
 ```
  
-- A `Body` that contains a `File` is read as `multipart/form-data` automatically.
-- The route's size limit and timeout are computed from the declaration. Other routes keep the 2 MB default, unless `budgets.toml` raises their `body_size` ([budgets](agent-experience.md#budgets)).
-- `File` is already on disk when the handler runs; it is never fully loaded in memory.
+- A field of type `File`, `Option<File>` or `Vec<File>` declares `max_size` and `types`; a `Vec<File>` also declares `max_count`. A missing or invalid declaration is a compile error (`CMP0017`), and so is an `Input` with files read by `Query<T>`.
+- A `Body` that contains a `File` is read as `multipart/form-data`; other fields of the form are read like a query string, with the same rules.
+- Types are checked against the file's content (its first bytes), never its name or the `Content-Type` the client sent. A type Balise cannot recognize is a compile error that lists the supported ones; text types (`text/csv`, `text/plain`, `application/json`) are checked as UTF-8.
+- Each file is written to disk as it arrives, never fully held in memory, and checked as it is written. Too large: `413` (`FILE0001`); wrong type: `415` (`FILE0002`); too many: `413` (`FILE0003`).
+- `File` is already on disk when the handler runs. `name()` is the name the client gave, `content_type()` the declared type that matched, `size()` its size in bytes.
+- `file.store("videos").await?` moves it into `storage.dir/videos`, under a name Balise generates, and returns its path within `storage.dir`: save it to find the file again. `file.read().await?` loads it in memory instead, for a file read once, such as an import. A file not stored is deleted at the end of the request.
+- The route's body limit is the sum of its declared files, plus the default body size for the other fields; its timeout grows with that size. Other routes keep the defaults, unless `budgets.toml` changes their `body_size` or `timeout` ([budgets](agent-experience.md#budgets)).
 - The generated TypeScript client knows each route's limits and accepted types, and rejects a file that is too large before sending it. Front end and back end cannot disagree.
-- Too large or wrong type: `413` or `415`, with the limit in the error message.
 ### Errors
  
 Use `?`. Errors from Balise (database, validation, not found…) become the right HTTP response with their code. Any other error becomes a `500` (`EXT0001`) that keeps it as its cause.
@@ -285,6 +292,7 @@ async fn visit(visits: State<Shared<Visits>>) -> Result<NoContent> {
 ## Heavy work and background tasks
  
 - CPU-heavy or blocking work (image processing, large computations, a synchronous library) goes in `balise::blocking(|| ...).await`, which keeps the server responsive and returns the closure's value. In dev, a handler or task that holds the event loop for more than 10 ms is reported (`PERF0002`).
+- A request has a timeout, 30 s by default (`limits.timeout`): past it, the handler is cancelled and the client gets a `503` (`HTTP0018`). Work that may take longer goes in a task. A route that must take longer raises its `timeout` in `budgets.toml`.
 - Work that continues after the response goes in `balise::spawn`. A task is an `async move` closure whose parameters are services, like a handler's, and which returns `Result<()>`:
 
 ```rust

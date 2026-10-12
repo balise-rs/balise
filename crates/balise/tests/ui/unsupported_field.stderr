@@ -9,7 +9,7 @@ help: the trait `balise::__private::InputValue` is not implemented for `Money`
   |
 3 | struct Money;
   | ^^^^^^^^^^^^
-  = note: fix: Use text, numbers, booleans and lists of them; `Option<T>` and `Patch<T>` in an `Input`; another `Output` in an `Output`.
+  = note: fix: Use text, numbers, booleans and lists of them; `Option<T>` and `Patch<T>` in an `Input`; another `Output` in an `Output`. A `File` field declares `max_size` and `types`.
   = note: more: balise explain CMP0010
   = help: the following other types implement trait `balise::__private::InputValue`:
             String

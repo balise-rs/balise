@@ -7,10 +7,16 @@
 use std::fmt::Display;
 
 use crate::extract::{FieldError, FieldErrors};
+use crate::file::{File, FileSpec};
 use crate::json::{Number, Value};
 
-/// A struct that derives `Input`: built from a JSON body or a query string, with its rules.
+/// A struct that derives `Input`: built from a JSON body, a query string, or a multipart
+/// body when it has `File` fields, with its rules.
 pub trait Input: Sized {
+    /// Its `File` fields: a body with files is read as multipart, and the route's limits
+    /// follow them.
+    const FILES: &'static [FileSpec] = &[];
+
     fn from_fields(fields: Fields) -> Result<Self, FieldErrors>;
 }
 
@@ -22,11 +28,13 @@ pub struct Fields {
     secrets: Vec<&'static str>,
 }
 
-/// One value received: JSON, or text from a query string.
+/// One value received: JSON, text from a query string or a form, or files.
 #[doc(hidden)]
 pub enum Raw {
     Json(Value),
     Text(String),
+    /// The files of one form field; empty when they went to a field that is not a file.
+    Files(Vec<File>),
 }
 
 impl Fields {
@@ -57,6 +65,28 @@ impl Fields {
             entries,
             errors: Vec::new(),
             secrets: Vec::new(),
+        }
+    }
+
+    /// The fields of a multipart body, as `multipart` reads them.
+    #[cfg(feature = "runtime")]
+    pub(crate) fn from_entries(entries: Vec<(String, Raw)>) -> Fields {
+        Fields {
+            entries,
+            errors: Vec::new(),
+            secrets: Vec::new(),
+        }
+    }
+
+    /// Reads a `File` field. `None` means it did not pass, and its error is recorded.
+    pub fn read_file<T: FileField>(&mut self, name: &str) -> Option<T> {
+        let raw = self.take(name);
+        match T::read(raw) {
+            Ok(value) => Some(value),
+            Err(error) => {
+                self.errors.push(error.into_field_error(name));
+                None
+            }
         }
     }
 
@@ -159,6 +189,85 @@ impl Problem {
     }
 }
 
+/// A field that holds files: `File`, `Option<File>` or `Vec<File>`, declared with
+/// `#[input(max_size = …, types(…))]`.
+#[diagnostic::on_unimplemented(
+    message = "CMP0017: `{Self}` cannot hold files",
+    label = "declared with `max_size` and `types`, so it must hold files",
+    note = "fix: Give the field the type `File`, `Option<File>` or `Vec<File>`, or remove `max_size`, `types` and `max_count`.",
+    note = "more: balise explain CMP0017"
+)]
+pub trait FileField: Sized {
+    /// The value rules apply to.
+    type Inner;
+    #[doc(hidden)]
+    fn read(raw: Option<Raw>) -> Result<Self, Problem>;
+    /// The value to check, when there is one.
+    fn inner(&self) -> Option<&Self::Inner>;
+}
+
+/// What a field holding files received, when it is not files.
+fn not_files(raw: Raw) -> Problem {
+    let found = match raw {
+        Raw::Json(value) => describe(&value),
+        Raw::Text(_) => "text".to_string(),
+        Raw::Files(_) => "a file".to_string(),
+    };
+    Problem::WrongType {
+        expected: "a file".to_string(),
+        found,
+    }
+}
+
+impl FileField for File {
+    type Inner = File;
+
+    fn read(raw: Option<Raw>) -> Result<File, Problem> {
+        match raw {
+            None => Err(Problem::Missing),
+            Some(Raw::Files(files)) => files.into_iter().next().ok_or(Problem::Missing),
+            Some(other) => Err(not_files(other)),
+        }
+    }
+
+    fn inner(&self) -> Option<&File> {
+        Some(self)
+    }
+}
+
+impl FileField for Option<File> {
+    type Inner = File;
+
+    fn read(raw: Option<Raw>) -> Result<Option<File>, Problem> {
+        match raw {
+            None => Ok(None),
+            Some(Raw::Files(files)) => Ok(files.into_iter().next()),
+            Some(other) => Err(not_files(other)),
+        }
+    }
+
+    fn inner(&self) -> Option<&File> {
+        self.as_ref()
+    }
+}
+
+impl FileField for Vec<File> {
+    type Inner = Vec<File>;
+
+    fn read(raw: Option<Raw>) -> Result<Vec<File>, Problem> {
+        match raw {
+            None => Err(Problem::Missing),
+            Some(Raw::Files(files)) if files.is_empty() => Err(Problem::Missing),
+            Some(Raw::Files(files)) => Ok(files),
+            Some(other) => Err(not_files(other)),
+        }
+    }
+
+    fn inner(&self) -> Option<&Vec<File>> {
+        Some(self)
+    }
+}
+
 /// A value an `Input` field can hold: text, numbers, booleans, lists.
 pub trait InputValue: Sized {
     /// What the value must be, as messages say it: `a whole number`.
@@ -188,7 +297,7 @@ fn describe(value: &Value) -> String {
 #[diagnostic::on_unimplemented(
     message = "CMP0010: `{Self}` cannot be a field of an `Input`",
     label = "Balise cannot read this type",
-    note = "fix: Use text, numbers, booleans and lists of them; `Option<T>` and `Patch<T>` in an `Input`; another `Output` in an `Output`.",
+    note = "fix: Use text, numbers, booleans and lists of them; `Option<T>` and `Patch<T>` in an `Input`; another `Output` in an `Output`. A `File` field declares `max_size` and `types`.",
     note = "more: balise explain CMP0010"
 )]
 pub trait InputField: Sized {
@@ -273,6 +382,10 @@ fn read_value<T: InputValue>(raw: Raw) -> Result<T, Problem> {
         Raw::Text(text) => T::from_text(&text).ok_or_else(|| Problem::WrongType {
             expected: T::expected(),
             found: format!("`{text}`"),
+        }),
+        Raw::Files(_) => Err(Problem::WrongType {
+            expected: T::expected(),
+            found: "a file".to_string(),
         }),
     }
 }

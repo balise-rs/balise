@@ -123,7 +123,7 @@ impl Error {
 
     /// The response: `{"error": {"code", "message", "fields"?, "location"?, "fix"?, "cause"?,
     /// "request_id"}}`. `details` adds location, fix and cause, and keeps a `5xx` as it is;
-    /// without it, a `5xx` is a generic `HTTP0500`.
+    /// without it, a `5xx` keeps its status with a generic `HTTP0500` body.
     pub fn render(&self, request_id: &str, details: bool) -> Response {
         let hidden = self.0.status >= 500 && !details;
         let (code, message) = match hidden {
@@ -164,7 +164,8 @@ impl Error {
         body.push_str(r#","request_id":"#);
         json::write_string(&mut body, request_id);
         body.push_str("}}");
-        Response::json(if hidden { 500 } else { self.0.status }, body)
+        // The status stays: a `503` tells a load balancer to retry, and reveals nothing.
+        Response::json(self.0.status, body)
     }
 
     /// The event logged for a `5xx`, before the request's summary.

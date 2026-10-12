@@ -468,7 +468,7 @@ struct ShopView {
 }
 
 #[get("/shops")]
-async fn list(db: Db, page: Query<PageParams>) -> Result<Page<ShopView>> {
+async fn list(db: Db, page: PageParams) -> Result<Page<ShopView>> {
     ShopView::query().page(db, page).await       // loads exactly what ShopView uses
 }
 ```
@@ -512,11 +512,13 @@ Two modes, cursor by default:
 - **Deterministic order.** Balise always adds `id` as the last sort key. UUIDv7 ids are ordered in time, so sorting by creation date is sorting by `id`: the most common case is also the most efficient.
 - **Opaque, checked cursors.** A cursor encodes the sort values of the last row and the sort order. A modified cursor, or one reused with another order, returns a `422` with a clear code.
 - **Totals on request.** `.with_total()` adds a total to cursor pagination; on PostgreSQL, `.with_estimated_total()` gives a fast estimate.
-- **Limits.** 20 items per page by default, 100 at most, set in `balise.toml`. A larger `per_page` sent by a client is lowered to the maximum.
-- **Per-route override.** Like file sizes, a route that needs other limits declares them, without changing the others:
+- **Parameters.** A paginated handler reads `page: PageParams`: `per_page`, and `cursor` or `page` from the query string. A `Query<T>` on the same route leaves these keys to it. `per_page` of `0` or not a number, or `cursor` and `page` together, answer `422`.
+- **Limits.** 20 items per page by default, 100 at most, set in `balise.toml` (`pagination.per_page`, `pagination.max_per_page`). A larger `per_page` sent by a client is lowered to the maximum.
+- **Per-route override.** Like file sizes, a route that needs other limits declares them, without changing the others; either bound can be left out:
 
   ```rust
   #[get("/exports/orders", page(default = 500, max = 5000))]
+  async fn export(db: Db, page: PageParams) -> Result<Page<OrderRow>> { … }
   ```
 
 Responses:

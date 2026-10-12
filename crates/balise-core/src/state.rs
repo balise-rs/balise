@@ -217,6 +217,8 @@ mod tests {
         line: 8,
         invoke,
         states: &[StateKey::of::<Cache>],
+        files: &[],
+        page: None,
     }];
 
     fn cache() -> StateFuture {

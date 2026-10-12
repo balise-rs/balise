@@ -1,0 +1,31 @@
+error: CMP0017: Invalid file field `logo`: Balise cannot recognize `image/svg+xml` by its content; supported types: image/png, image/jpeg, image/gif, image/webp, image/avif, image/heic, application/pdf, application/zip, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/gzip, video/mp4, video/quicktime, video/webm, audio/mpeg, audio/mp4, audio/wav, audio/ogg, text/plain, text/csv, text/markdown, application/json
+         fix: Declare a file as `#[input(max_size = "5MB", types("image/png", "image/jpeg"))] photo: File`, with `max_count = …` for a `Vec<File>`.
+         more: balise explain CMP0017
+ --> tests/ui/file_invalid.rs:5:37
+  |
+5 |     #[input(max_size = "1MB", types("image/svg+xml"))]
+  |                                     ^^^^^^^^^^^^^^^
+
+error: CMP0017: Invalid file field `photos`: a `Vec<File>` declares how many files it takes: `max_count = 4`
+         fix: Declare a file as `#[input(max_size = "5MB", types("image/png", "image/jpeg"))] photo: File`, with `max_count = …` for a `Vec<File>`.
+         more: balise explain CMP0017
+  --> tests/ui/file_invalid.rs:12:13
+   |
+12 |     photos: Vec<File>,
+   |             ^^^
+
+error: CMP0017: Invalid file field `title`: `max_size`, `types` and `max_count` go on a field of type `File`, `Option<File>` or `Vec<File>`
+         fix: Declare a file as `#[input(max_size = "5MB", types("image/png", "image/jpeg"))] photo: File`, with `max_count = …` for a `Vec<File>`.
+         more: balise explain CMP0017
+  --> tests/ui/file_invalid.rs:18:12
+   |
+18 |     title: String,
+   |            ^^^^^^
+
+error: CMP0017: Invalid file field `photo`: a file field declares its `max_size` and `types`
+         fix: Declare a file as `#[input(max_size = "5MB", types("image/png", "image/jpeg"))] photo: File`, with `max_count = …` for a `Vec<File>`.
+         more: balise explain CMP0017
+  --> tests/ui/file_invalid.rs:23:12
+   |
+23 |     photo: File,
+   |            ^^^^

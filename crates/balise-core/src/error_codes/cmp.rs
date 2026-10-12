@@ -145,28 +145,32 @@ converted first, usually with `.to_string()`.
 "#,
     }
     CMP0013 {
-        title: "balise.toml not found",
-        message: "`balise::run!()` cannot find balise.toml: {reason}",
-        fix: "Put `balise.toml` next to `Cargo.toml`; `balise new` creates it, and it may hold only comments.",
+        title: "Project file not found",
+        message: "`balise::run!()` cannot find {file}: {reason}",
+        fix: "Put `{file}` next to `Cargo.toml`; `balise new` creates both files, and they may hold only comments.",
         explanation: r#"
-`balise::run!()`, in `main.rs`, embeds `balise.toml` in the binary, so that a deployment
-needs nothing but the binary: the production image never misses its configuration. The
-file is read next to `Cargo.toml`, nowhere else. When a file with a close name, or a
-`balise.toml` in another folder, exists, the message names it.
+`balise::run!()`, in `main.rs`, embeds the project's files in the binary, so that a
+deployment needs nothing but the binary: the production image never misses its
+configuration. Both are read next to `Cargo.toml`, nowhere else:
 
+- `balise.toml`, the configuration, is required;
+- `budgets.toml`, the per-handler budgets, is optional, but one in another folder would be
+  ignored silently, so it is an error.
+
+When a file with a close name, or one in another folder, exists, the message names it.
 Values that differ between deployments (ports, secrets) come from environment variables,
-which override the embedded file.
+which override the embedded configuration.
 "#,
     }
     CMP0014 {
-        title: "balise.toml is not valid TOML",
-        message: "balise.toml is not valid TOML: {reason}",
+        title: "Project file is not valid TOML",
+        message: "{file} is not valid TOML: {reason}",
         fix: "Fix the line the message names: a `key = value` per line, text in double quotes, sections written `[name]`.",
         explanation: r#"
-`balise::run!()` reads `balise.toml` when the app is compiled, so a syntax error is reported
-by `cargo check` and `balise check`, before the app runs. Whether each key and value makes
-sense is checked when the app starts, by the rules of its environment (`CFG` codes), and
-by `config check`.
+`balise::run!()` reads `balise.toml` and `budgets.toml` when the app is compiled, so a
+syntax error is reported by `cargo check` and `balise check`, before the app runs. Whether
+each key and value makes sense is checked when the app starts, by the rules of its
+environment (`CFG` codes), and by `config check`.
 "#,
     }
     CMP0015 {
@@ -191,6 +195,42 @@ For state that changes, return a `Shared<Type>` and read it with `State<Shared<T
 Balise provides, like a handler's: `async move |cache: State<PriceCache>| …`. What comes from
 the request (its body, its path, the current user) is not a service: copy it into the
 task with `move`.
+"#,
+    }
+    CMP0017 {
+        title: "Invalid file field",
+        message: "Invalid file field `{field}`: {reason}",
+        fix: "Declare a file as `#[input(max_size = \"5MB\", types(\"image/png\", \"image/jpeg\"))] photo: File`, with `max_count = …` for a `Vec<File>`.",
+        explanation: r#"
+A field of type `File`, `Option<File>` or `Vec<File>` declares how large its files can be
+and which types they may have; a `Vec<File>` also declares how many files it takes:
+
+    #[derive(Input)]
+    struct UploadPhotos {
+        #[input(max_size = "5MB", types("image/png", "image/jpeg"), max_count = 4)]
+        photos: Vec<File>,
+    }
+
+These declarations set the route's body limit and timeout, and the generated client checks
+them before sending. Types are checked against the file's content, so only types Balise can
+recognize are accepted; the message lists them. A `File` is read from a multipart body
+only: it cannot be part of a `Query<T>`.
+"#,
+    }
+    CMP0018 {
+        title: "Invalid page declaration",
+        message: "Invalid `page(…)` on `{function}`: {reason}",
+        fix: "Write `page(default = 50, max = 500)` with whole numbers from 1, `default` at most `max`, on a handler that reads `page: PageParams`.",
+        explanation: r#"
+Paginated routes read `page: PageParams`. Pages hold `pagination.per_page` items by default
+and `pagination.max_per_page` at most, from `balise.toml`. A route that needs other limits
+declares them on its attribute, without changing the others:
+
+    #[get("/exports/orders", page(default = 500, max = 5000))]
+    async fn export(page: PageParams) -> Result<Page<OrderRow>> { … }
+
+`page(…)` on a handler that does not read `PageParams` would have no effect, so it is an
+error.
 "#,
     }
 }

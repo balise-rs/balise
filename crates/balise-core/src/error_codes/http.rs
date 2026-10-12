@@ -131,7 +131,7 @@ not exist.
     HTTP0012 {
         title: "Request body too large",
         message: "The request body is larger than this route's limit of {limit}",
-        fix: "If the route is meant to receive bodies this large, raise its `body_size` in `budgets.toml`. To receive files, declare `File` fields in the route's `Input`. Otherwise the client is sending more than the route accepts.",
+        fix: "If the route is meant to receive bodies this large, raise its `body_size` in `budgets.toml`, under the handler's name. To receive files, declare `File` fields in the route's `Input`. Otherwise the client is sending more than the route accepts.",
         explanation: r#"
 Balise stops reading a body as soon as it exceeds the route's limit and answers `413`,
 without loading the rest in memory. There are three usual causes:
@@ -194,6 +194,31 @@ own type: `struct BillingClient(Client)`.
 A `#[balise::state]` function returned an error at startup: a service it connects to is
 unreachable, a file it loads is missing… The app does not start without its state, rather
 than failing on every request that reads it.
+"#,
+    }
+    HTTP0017 {
+        title: "Request body too slow",
+        message: "The request body was not received within this route's timeout of {timeout}",
+        fix: "If clients are expected to send this slowly (large uploads on slow connections), raise `timeout` for `{handler}` in `budgets.toml`. Otherwise nothing is wrong on the server.",
+        explanation: r#"
+Every route has a timeout: the default (`limits.timeout`), longer for a route with files in
+proportion to their declared sizes, or the `timeout` of its entry in `budgets.toml`. The
+client was still sending the body when it ran out, so Balise stopped reading and answered
+`408`. Most often the client's connection is slow or stalled.
+"#,
+    }
+    HTTP0018 {
+        title: "Handler timed out",
+        message: "`{handler}` did not answer within its timeout of {timeout}",
+        fix: "Find what the handler waits for (a slow query, an external call), make it faster, or move the work to `balise::spawn`. Raise `timeout` for `{handler}` in `budgets.toml` only if it must take this long.",
+        explanation: r#"
+Every route has a timeout: the default (`limits.timeout`), longer for a route with files, or
+the `timeout` of its entry in `budgets.toml`. When it runs out, the handler is cancelled
+and the answer is `503`. A cancellation rolls back the request's transaction, but external
+calls already sent are not undone.
+
+Work that is allowed to take long belongs in a background task (`balise::spawn`), with the
+client told that it was accepted (`Created<T>` or `NoContent`).
 "#,
     }
     HTTP0500 {

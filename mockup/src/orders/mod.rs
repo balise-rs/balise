@@ -11,7 +11,7 @@ use api::{CreateOrder, OrderError, OrderFilters, OrderView, UpdateOrder};
 pub use model::{NewOrder, Order, OrderId, OrderStatus};
 
 #[get("/orders")]
-async fn list(filters: Query<OrderFilters>, page: Query<PageParams>, user: CurrentUser, db: Db) -> Result<Page<OrderView>> {
+async fn list(filters: Query<OrderFilters>, page: PageParams, user: CurrentUser, db: Db) -> Result<Page<OrderView>> {
     let mut query = Order::query()
         .owned_by(&user)
         .order_by(|o| o.created_at.desc());

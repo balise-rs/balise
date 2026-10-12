@@ -4,7 +4,9 @@ use balise_core::config::load::{self, Files, Mode};
 use balise_core::config::{Config, Environment};
 use balise_core::error_codes::CFG0008;
 use balise_core::event::{Event, Level};
+use balise_core::limits::RouteLimits;
 use balise_core::log::{self, Format, Logger};
+use balise_core::registry;
 
 /// Starts the application. `build` is the environment the binary was built for.
 ///
@@ -39,11 +41,15 @@ fn serve(files: Files, build: Environment, variables: &[(String, String)]) -> ! 
         Err(errors) => fail(&errors, environment),
     };
     let config = loaded.config;
+    let limits = match RouteLimits::resolve(registry::routes(), &config, files.budgets) {
+        Ok(limits) => limits,
+        Err(errors) => fail(&errors, environment),
+    };
     log::install(Logger::stdout(config.log_format, config.log_level));
     for warning in loaded.warnings {
         warning.emit();
     }
-    crate::run(config)
+    crate::run(config, limits)
 }
 
 /// Reports what stops the startup, in the format of the environment, and exits.
@@ -76,12 +82,25 @@ fn check(files: Files, build: Environment, variables: &[(String, String)], args:
             return 1;
         }
     };
-    match load::load(&files, environment, build, variables, Mode::Check) {
-        Ok(_) => {
+    let loaded = load::load(&files, environment, build, variables, Mode::Check);
+    // Budgets are checked against the configuration loaded, or the defaults when it is not.
+    let config = match &loaded {
+        Ok(loaded) => loaded.config.clone(),
+        Err(_) => Config::defaults(environment),
+    };
+    let budgets = RouteLimits::resolve(registry::routes(), &config, files.budgets).err();
+    let errors: Vec<Event> = loaded
+        .err()
+        .into_iter()
+        .flatten()
+        .chain(budgets.into_iter().flatten())
+        .collect();
+    match errors.is_empty() {
+        true => {
             println!("✓ The configuration is valid for {}", environment.name());
             0
         }
-        Err(errors) => {
+        false => {
             for event in &errors {
                 println!("{}", event.render_text(color()));
             }

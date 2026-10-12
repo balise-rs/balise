@@ -103,6 +103,59 @@ pub fn parse_size(text: &str) -> Option<usize> {
     number.checked_mul(factor)
 }
 
+/// A duration as written in configuration: `500ms`, `30s`, `2m`, `1h`.
+pub fn parse_duration(text: &str) -> Option<std::time::Duration> {
+    let text = text.trim();
+    let digits = text
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(text.len());
+    let (number, unit) = text.split_at(digits);
+    let number: u64 = number.parse().ok()?;
+    let millis = match unit.trim() {
+        "ms" => 1,
+        "s" => 1000,
+        "m" | "min" => 60 * 1000,
+        "h" => 60 * 60 * 1000,
+        _ => return None,
+    };
+    number
+        .checked_mul(millis)
+        .map(std::time::Duration::from_millis)
+}
+
+/// A duration as messages show it: `500 ms`, `30 s`, `2 min`, `1 h 30 min`.
+pub fn format_duration(duration: std::time::Duration) -> String {
+    let millis = duration.as_millis();
+    if millis < 1000 || !millis.is_multiple_of(1000) {
+        return format!("{millis} ms");
+    }
+    let seconds = millis / 1000;
+    match (seconds / 3600, seconds % 3600 / 60, seconds % 60) {
+        (0, 0, s) => format!("{s} s"),
+        (0, m, 0) => format!("{m} min"),
+        (0, m, s) => format!("{m} min {s} s"),
+        (h, 0, 0) => format!("{h} h"),
+        (h, m, 0) => format!("{h} h {m} min"),
+        (_, _, _) => format!("{seconds} s"),
+    }
+}
+
+/// An identifier no one can guess or predict, as 32 hexadecimal digits: names of stored
+/// files and temporary uploads.
+pub fn unique_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    // Each `RandomState` is seeded from the OS once per thread, then varied: two hashes of a
+    // counter with fresh keys give 128 bits no client can predict.
+    let half = |salt: u64| {
+        let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+        hasher.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed) ^ salt);
+        hasher.finish()
+    };
+    format!("{:016x}{:016x}", half(0), half(u64::MAX))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,5 +185,27 @@ mod tests {
         assert_eq!(format_size(1536), "1.5 KB");
         assert_eq!(format_size(2 * 1024 * 1024), "2 MB");
         assert_eq!(format_size(5 * 1024 * 1024 * 1024), "5 GB");
+    }
+
+    #[test]
+    fn durations_are_read_and_shown() {
+        use std::time::Duration;
+        assert_eq!(parse_duration("30s"), Some(Duration::from_secs(30)));
+        assert_eq!(parse_duration("500ms"), Some(Duration::from_millis(500)));
+        assert_eq!(parse_duration("2m"), Some(Duration::from_secs(120)));
+        assert_eq!(parse_duration("1h"), Some(Duration::from_secs(3600)));
+        assert_eq!(parse_duration("30"), None);
+        assert_eq!(parse_duration("s"), None);
+        assert_eq!(format_duration(Duration::from_millis(500)), "500 ms");
+        assert_eq!(format_duration(Duration::from_secs(30)), "30 s");
+        assert_eq!(format_duration(Duration::from_secs(150)), "2 min 30 s");
+        assert_eq!(format_duration(Duration::from_secs(5400)), "1 h 30 min");
+    }
+
+    #[test]
+    fn unique_ids_differ() {
+        let (a, b) = (unique_id(), unique_id());
+        assert_eq!(a.len(), 32);
+        assert_ne!(a, b);
     }
 }

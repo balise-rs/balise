@@ -1,7 +1,9 @@
 //! `balise::run!()`: embeds the project's files in the binary, then starts the app.
 //!
 //! The files are found next to `Cargo.toml` and checked here, so that a missing, misplaced or
-//! malformed `balise.toml` is a compile error rather than a surprise at deployment.
+//! malformed `balise.toml` or `budgets.toml` is a compile error rather than a surprise at
+//! deployment. Both are required: cargo only notices a file that `include_str!` already
+//! reads, so an optional file created later would be ignored until the next change of code.
 
 use std::path::{Path, PathBuf};
 
@@ -23,6 +25,9 @@ const NEAR_NAMES: &[&str] = &[
     "config.toml",
 ];
 
+/// Names someone may give `budgets.toml` by mistake.
+const NEAR_BUDGETS: &[&str] = &["Budgets.toml", "budget.toml", "budgets.tml", "budgets.yaml"];
+
 /// Folders never searched for a misplaced `balise.toml`.
 const SKIPPED: &[&str] = &["target", "node_modules", ".git"];
 
@@ -35,62 +40,89 @@ pub(crate) fn expand() -> syn::Result<TokenStream> {
 fn expand_in(root: &Path) -> syn::Result<TokenStream> {
     let config = root.join("balise.toml");
     if !config.is_file() {
-        return Err(missing(root));
+        return Err(missing(root, "balise.toml", NEAR_NAMES));
     }
-    let text = std::fs::read_to_string(&config).map_err(|cause| {
-        error(
-            Span::call_site(),
-            CMP0014,
-            &[("reason", &format!("it cannot be read: {cause}"))],
-            &[],
-        )
-    })?;
-    if let Err(problem) = toml::de::DeTable::parse(&text) {
-        let (line, column) = problem
-            .span()
-            .map_or((1, 1), |span| position(&text, span.start));
-        let reason = format!("line {line}, column {column}: {}", problem.message().trim());
-        return Err(error(
-            Span::call_site(),
-            CMP0014,
-            &[("reason", &reason)],
-            &[],
-        ));
+    check_syntax(&config, "balise.toml")?;
+    let budgets = root.join("budgets.toml");
+    if !budgets.is_file() {
+        return Err(missing(root, "budgets.toml", NEAR_BUDGETS));
     }
+    check_syntax(&budgets, "budgets.toml")?;
+    let budgets = budgets.display().to_string();
 
     let path = config.display().to_string();
     Ok(quote! {
         ::balise::__private::start(::balise::__private::Files {
             config: ::core::include_str!(#path),
+            budgets: ::core::include_str!(#budgets),
         })
     })
 }
 
-/// The error for a missing `balise.toml`, pointing to a misplaced or misnamed one if any.
-fn missing(root: &Path) -> syn::Error {
-    let found = NEAR_NAMES
+/// Reads a file and checks that it is TOML.
+fn check_syntax(path: &Path, file: &str) -> syn::Result<()> {
+    let invalid = |reason: &str| {
+        error(
+            Span::call_site(),
+            CMP0014,
+            &[("file", file), ("reason", reason)],
+            &[],
+        )
+    };
+    let text = std::fs::read_to_string(path)
+        .map_err(|cause| invalid(&format!("it cannot be read: {cause}")))?;
+    if let Err(problem) = toml::de::DeTable::parse(&text) {
+        let (line, column) = problem
+            .span()
+            .map_or((1, 1), |span| position(&text, span.start));
+        return Err(invalid(&format!(
+            "line {line}, column {column}: {}",
+            problem.message().trim()
+        )));
+    }
+    Ok(())
+}
+
+/// The error for a file found elsewhere, or under a close name.
+fn misplaced(root: &Path, file: &str, found: &Path) -> syn::Error {
+    let relative = found
+        .strip_prefix(root)
+        .unwrap_or(found)
+        .display()
+        .to_string();
+    let reason =
+        format!("found `{relative}` instead; move or rename it to `{file}`, next to `Cargo.toml`");
+    error(
+        Span::call_site(),
+        CMP0013,
+        &[("file", file), ("reason", &reason)],
+        &[("file", file)],
+    )
+}
+
+/// The error for a missing file, pointing to a misplaced or misnamed one if any.
+fn missing(root: &Path, file: &str, near: &[&str]) -> syn::Error {
+    let found = near
         .iter()
         .map(|name| root.join(name))
         .find(|path| path.is_file())
-        .or_else(|| find_misplaced(root, root, 0));
-    let reason = match found {
-        Some(path) => {
-            let relative = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
-            format!(
-                "found `{relative}` instead; move or rename it to `balise.toml`, next to `Cargo.toml`"
-            )
-        }
-        None => "there is none next to `Cargo.toml`".to_string(),
-    };
-    error(Span::call_site(), CMP0013, &[("reason", &reason)], &[])
+        .or_else(|| find_misplaced(root, root, file, 0));
+    match found {
+        Some(path) => misplaced(root, file, &path),
+        None => error(
+            Span::call_site(),
+            CMP0013,
+            &[
+                ("file", file),
+                ("reason", "there is none next to `Cargo.toml`"),
+            ],
+            &[("file", file)],
+        ),
+    }
 }
 
-/// A `balise.toml` in a folder of the project, a few levels down at most.
-fn find_misplaced(root: &Path, dir: &Path, depth: usize) -> Option<PathBuf> {
+/// A file with this name in a folder of the project, a few levels down at most.
+fn find_misplaced(root: &Path, dir: &Path, file: &str, depth: usize) -> Option<PathBuf> {
     if depth > 3 {
         return None;
     }
@@ -100,7 +132,7 @@ fn find_misplaced(root: &Path, dir: &Path, depth: usize) -> Option<PathBuf> {
         .collect();
     entries.sort();
     for path in &entries {
-        if dir != root && path.file_name().is_some_and(|name| name == "balise.toml") {
+        if dir != root && path.file_name().is_some_and(|name| name == file) {
             return Some(path.clone());
         }
     }
@@ -114,7 +146,7 @@ fn find_misplaced(root: &Path, dir: &Path, depth: usize) -> Option<PathBuf> {
                 .is_some_and(|name| SKIPPED.contains(&name));
             match skipped {
                 true => None,
-                false => find_misplaced(root, &path, depth + 1),
+                false => find_misplaced(root, &path, file, depth + 1),
             }
         })
 }
@@ -156,7 +188,10 @@ mod tests {
 
     #[test]
     fn a_valid_file_is_embedded() {
-        let root = project("valid", &[("balise.toml", "port = 4000\n")]);
+        let root = project(
+            "valid",
+            &[("balise.toml", "port = 4000\n"), ("budgets.toml", "")],
+        );
         let tokens = expand_in(&root).unwrap().to_string();
         assert!(tokens.contains("include_str"), "{tokens}");
     }
@@ -177,10 +212,43 @@ mod tests {
     }
 
     #[test]
+    fn budgets_are_required_and_checked() {
+        let both = project("budgets", &[("balise.toml", ""), ("budgets.toml", "")]);
+        assert!(
+            expand_in(&both)
+                .unwrap()
+                .to_string()
+                .contains("budgets.toml")
+        );
+
+        let none = project("no-budgets", &[("balise.toml", "")]);
+        assert!(message(&none).starts_with(
+            "CMP0013: `balise::run!()` cannot find budgets.toml: there is none next to `Cargo.toml`"
+        ));
+
+        let misplaced = project(
+            "misplaced-budgets",
+            &[("balise.toml", ""), ("src/budgets.toml", "")],
+        );
+        assert!(message(&misplaced).starts_with(
+            "CMP0013: `balise::run!()` cannot find budgets.toml: found `src/budgets.toml` instead"
+        ));
+
+        let invalid = project(
+            "invalid-budgets",
+            &[("balise.toml", ""), ("budgets.toml", "[\"a::b\"\n")],
+        );
+        assert!(message(&invalid).starts_with("CMP0014: budgets.toml is not valid TOML: line 1"));
+    }
+
+    #[test]
     fn a_syntax_error_names_its_line_and_column() {
         let root = project(
             "syntax",
-            &[("balise.toml", "port = 4000\nlog.level = debug\n")],
+            &[
+                ("balise.toml", "port = 4000\nlog.level = debug\n"),
+                ("budgets.toml", ""),
+            ],
         );
         let message = message(&root);
         assert!(

@@ -6,13 +6,14 @@ mod model;
 use balise::prelude::*;
 
 use api::{
-    CreateOrder, OrderError, OrderFilters, OrderLineView, OrderList, OrderView, UpdateOrder,
+    AttachReceipt, CreateOrder, OrderError, OrderFilters, OrderLineView, OrderList, OrderView,
+    ReceiptView, UpdateOrder,
 };
 use model::Order;
 
-#[get("/orders")]
-async fn list(filters: Query<OrderFilters>) -> OrderList {
-    let items = (1..=filters.per_page)
+#[get("/orders", page(max = 50))]
+async fn list(page: PageParams, filters: Query<OrderFilters>) -> OrderList {
+    let items = (1..=page.per_page())
         .map(Order::sample)
         .filter(|order| {
             filters
@@ -59,6 +60,18 @@ async fn update(id: Path<u32>, input: Body<UpdateOrder>) -> Result<OrderView> {
         order.note = note;
     }
     Ok(order.into())
+}
+
+#[post("/orders/{id}/receipt")]
+async fn attach_receipt(id: Path<u32>, input: Body<AttachReceipt>) -> Result<Created<ReceiptView>> {
+    let size = input.receipt.size();
+    let stored = input.receipt.store("receipts").await?;
+    Ok(Created(ReceiptView {
+        order_id: id,
+        label: input.label,
+        path: stored.path().to_string(),
+        size,
+    }))
 }
 
 #[delete("/orders/{id}")]

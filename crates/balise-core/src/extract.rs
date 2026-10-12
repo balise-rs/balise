@@ -67,7 +67,8 @@ pub struct Path<T>(T);
 /// The query string, read into an `Input`.
 pub struct Query<T>(T);
 
-/// The JSON body, read into an `Input`.
+/// The body, read into an `Input`: JSON, or `multipart/form-data` when it has `File` fields.
+/// It is read after every other parameter, so a request they reject is never read.
 pub struct Body<T>(T);
 
 macro_rules! unwrap_value {
@@ -172,7 +173,12 @@ impl<T: PathValue + Send> FromRequest for Path<T> {
 
 impl<T: Input + Send> FromRequest for Query<T> {
     fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Error>> + Send {
-        let value = T::from_fields(Fields::from_query(query_pairs(&request.query)))
+        let mut pairs = query_pairs(&request.query);
+        // On a paginated route, the page keys belong to `PageParams`.
+        if request.limits.page.is_some() {
+            pairs.retain(|(key, _)| !crate::page::KEYS.contains(&key.as_str()));
+        }
+        let value = T::from_fields(Fields::from_query(pairs))
             .map(Query)
             .map_err(validation_failed);
         async move { value }
@@ -180,21 +186,53 @@ impl<T: Input + Send> FromRequest for Query<T> {
 }
 
 impl<T: Input + Send> FromRequest for Body<T> {
-    fn from_request(request: &mut Request) -> impl Future<Output = Result<Self, Error>> + Send {
-        let value = read_body(request).map(Body);
-        async move { value }
+    async fn from_request(request: &mut Request) -> Result<Self, Error> {
+        read_body(request).await.map(Body)
     }
 }
 
-fn read_body<T: Input>(request: &Request) -> Result<T, Error> {
-    if let Some(content_type) = request.header("content-type") {
-        let essence = content_type.split(';').next().unwrap_or_default().trim();
-        if !essence.eq_ignore_ascii_case("application/json") {
-            return Err(Error::coded(415, VAL0003, &[("content_type", essence)]));
-        }
+const JSON: &str = "application/json";
+
+/// Reads the body as JSON, or as multipart when the `Input` has files.
+async fn read_body<T: Input>(request: &mut Request) -> Result<T, Error> {
+    let content_type = request.header("content-type").map(str::to_string);
+    let essence = content_type
+        .as_deref()
+        .map(|value| value.split(';').next().unwrap_or_default().trim());
+    let unsupported = |expected: &str| {
+        let found = essence.unwrap_or_default();
+        let expected = format!("`{expected}`");
+        Error::coded(
+            415,
+            VAL0003,
+            &[("content_type", found), ("expected", &expected)],
+        )
+    };
+    #[cfg(feature = "runtime")]
+    if !T::FILES.is_empty() {
+        const MULTIPART: &str = "multipart/form-data";
+        let content_type = match essence {
+            Some(essence) if essence.eq_ignore_ascii_case(MULTIPART) => content_type.as_deref(),
+            _ => return Err(unsupported(MULTIPART)),
+        };
+        let text_size = request.limits.text_size;
+        let fields = crate::multipart::read(
+            &mut request.body,
+            content_type.unwrap_or_default(),
+            T::FILES,
+            text_size,
+        )
+        .await?;
+        return T::from_fields(fields).map_err(validation_failed);
     }
-    let value = json::parse(&request.body)
-        .map_err(|cause| Error::coded(400, VAL0002, &[("cause", &cause)]))?;
+    if let Some(essence) = essence
+        && !essence.eq_ignore_ascii_case(JSON)
+    {
+        return Err(unsupported(JSON));
+    }
+    let bytes = request.body.bytes().await?;
+    let value =
+        json::parse(&bytes).map_err(|cause| Error::coded(400, VAL0002, &[("cause", &cause)]))?;
     let fields = Fields::from_json(value).map_err(|kind| {
         let cause = format!("expected an object, found {kind}");
         Error::coded(400, VAL0002, &[("cause", &cause)])
@@ -202,13 +240,13 @@ fn read_body<T: Input>(request: &Request) -> Result<T, Error> {
     T::from_fields(fields).map_err(validation_failed)
 }
 
-fn validation_failed(fields: FieldErrors) -> Error {
+pub(crate) fn validation_failed(fields: FieldErrors) -> Error {
     let names: Vec<&str> = fields.iter().map(|f| f.field.as_str()).collect();
     Error::coded(422, VAL0001, &[("names", &names.join(", "))]).with_fields(fields)
 }
 
 /// `a=1&b=x%20y` gives `("a", "1")` and `("b", "x y")`; `+` is a space.
-fn query_pairs(query: &str) -> Vec<(String, String)> {
+pub(crate) fn query_pairs(query: &str) -> Vec<(String, String)> {
     query
         .split('&')
         .filter(|pair| !pair.is_empty())

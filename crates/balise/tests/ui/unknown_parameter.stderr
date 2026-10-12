@@ -13,6 +13,7 @@ help: the trait `balise::__private::FromRequest` is not implemented for `CreateO
   = note: more: balise explain CMP0006
   = help: the following other types implement trait `balise::__private::FromRequest`:
             Body<T>
+            PageParams
             Query<T>
             RequestId
             State<T>

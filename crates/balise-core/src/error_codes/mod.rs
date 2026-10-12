@@ -35,6 +35,7 @@ macro_rules! codes {
 mod cfg;
 mod cmp;
 mod ext;
+mod file;
 mod http;
 mod perf;
 mod val;
@@ -42,6 +43,7 @@ mod val;
 pub use cfg::*;
 pub use cmp::*;
 pub use ext::*;
+pub use file::*;
 pub use http::*;
 pub use perf::*;
 pub use val::*;
@@ -51,6 +53,7 @@ pub const AREAS: &[(&str, &[&ErrorCode])] = &[
     ("CFG", cfg::ALL),
     ("CMP", cmp::ALL),
     ("EXT", ext::ALL),
+    ("FILE", file::ALL),
     ("HTTP", http::ALL),
     ("PERF", perf::ALL),
     ("VAL", val::ALL),
@@ -58,7 +61,7 @@ pub const AREAS: &[(&str, &[&ErrorCode])] = &[
 
 /// Prefixes that applications cannot use: Balise's areas, present and planned.
 pub const RESERVED_PREFIXES: &[&str] = &[
-    "AUTH", "CFG", "CMP", "DB", "DEV", "EXT", "HTTP", "MAIL", "PERF", "VAL",
+    "AUTH", "CFG", "CMP", "DB", "DEV", "EXT", "FILE", "HTTP", "MAIL", "PERF", "RT", "VAL",
 ];
 
 /// A registered error code. Only the registry and `AppError` can create one.

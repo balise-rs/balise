@@ -7,6 +7,8 @@
 
 pub mod load;
 
+use std::time::Duration;
+
 use crate::event::Level;
 use crate::log::Format;
 
@@ -23,6 +25,12 @@ pub struct Config {
     /// The largest request body read, in bytes, for routes without files and without a
     /// `body_size` in `budgets.toml`.
     pub body_size: usize,
+    /// How long a request may take, for routes without files and without a `timeout` in
+    /// `budgets.toml`.
+    pub timeout: Duration,
+    /// Where `File::store` puts files, and uploads wait in `.uploads` meanwhile.
+    pub storage_dir: String,
+    pub pagination: PaginationConfig,
     /// Whether error responses show location, fix and cause, and keep a `5xx` as it is.
     /// Follows the environment, never set directly: on in dev and test only.
     pub error_details: bool,
@@ -40,6 +48,19 @@ pub struct ApiConfig {
     /// When set, routes are served under `{prefix}/v{version}`.
     pub version: Option<u32>,
 }
+
+/// Page sizes, for routes that do not declare theirs with `page(…)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaginationConfig {
+    /// Items per page when the client does not ask.
+    pub per_page: u32,
+    /// The most a client can ask for; a larger `per_page` is lowered to it.
+    pub max_per_page: u32,
+}
+
+/// The slowest upload a route with files is expected to receive, in bytes per second: its
+/// timeout grows by the time its declared files take at this rate.
+pub const UPLOAD_RATE: u64 = 1024 * 1024;
 
 /// Where the application runs. Chosen by `BALISE_ENV`, or by how the binary was built.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +105,12 @@ impl Config {
                 version: None,
             },
             body_size: 2 * 1024 * 1024,
+            timeout: Duration::from_secs(30),
+            storage_dir: "storage".to_string(),
+            pagination: PaginationConfig {
+                per_page: 20,
+                max_per_page: 100,
+            },
             error_details: environment != Environment::Prod,
             log_format: match environment {
                 Environment::Dev => Format::Text,
@@ -198,6 +225,58 @@ pub const SETTINGS: &[Setting] = &[
         apply: |config, raw| match raw.text().and_then(crate::text::parse_size) {
             Some(size) if size > 0 => {
                 config.body_size = size;
+                true
+            }
+            _ => false,
+        },
+    },
+    Setting {
+        key: "limits.timeout",
+        kind: Kind::Safe,
+        expected: "a duration such as `30s`, `2m` or `500ms`",
+        also: &[],
+        apply: |config, raw| match raw.text().and_then(crate::text::parse_duration) {
+            Some(timeout) if !timeout.is_zero() => {
+                config.timeout = timeout;
+                true
+            }
+            _ => false,
+        },
+    },
+    Setting {
+        key: "storage.dir",
+        kind: Kind::Critical,
+        expected: "a folder path, such as `storage` or `/data/storage`",
+        also: &[],
+        apply: |config, raw| match raw.text() {
+            Some(dir) if !dir.trim().is_empty() => {
+                config.storage_dir = dir.to_string();
+                true
+            }
+            _ => false,
+        },
+    },
+    Setting {
+        key: "pagination.per_page",
+        kind: Kind::Safe,
+        expected: "a whole number from 1, such as `20`",
+        also: &[],
+        apply: |config, raw| match raw.integer().and_then(|n| u32::try_from(n).ok()) {
+            Some(n) if n > 0 => {
+                config.pagination.per_page = n;
+                true
+            }
+            _ => false,
+        },
+    },
+    Setting {
+        key: "pagination.max_per_page",
+        kind: Kind::Safe,
+        expected: "a whole number from 1, such as `100`",
+        also: &[],
+        apply: |config, raw| match raw.integer().and_then(|n| u32::try_from(n).ok()) {
+            Some(n) if n > 0 => {
+                config.pagination.max_per_page = n;
                 true
             }
             _ => false,

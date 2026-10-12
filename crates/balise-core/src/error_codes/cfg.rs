@@ -89,4 +89,54 @@ the configuration of an environment with the strictest rules and exits: `0` when
 valid, `1` otherwise. Run it in CI with `--env prod` before deploying.
 "#,
     }
+    CFG0009 {
+        title: "Budget for an unknown handler",
+        message: "`[\"{handler}\"]` names no handler ({source}){suggestion}",
+        fix: "Use the handler's name as `balise routes` shows it (`orders::list`), or remove the entry.",
+        explanation: r#"
+Each section of `budgets.toml` is named after a handler: its module and function,
+`["orders::list"]`. A section that names no handler would be ignored silently, typically
+after a rename, so the app does not start. The message suggests the closest handler.
+"#,
+    }
+    CFG0010 {
+        title: "Invalid budget",
+        message: "{problem} ({source})",
+        fix: "Write `body_size = \"20MB\"` or `timeout = \"2m\"` under the handler's section; `balise explain CFG0010` lists the budgets.",
+        explanation: r#"
+`budgets.toml` holds a section per handler whose budgets differ from the defaults:
+
+    ["imports::create"]
+    body_size = "20MB"
+    timeout = "2m"
+
+- `body_size`: the largest request body, as `512KB`, `20MB` or `1GB`.
+- `timeout`: how long the request may take, as `500ms`, `30s`, `2m` or `1h`.
+
+Other budgets (queries, response size) come with the test tooling. An unknown key or an
+invalid value stops the startup, so that a budget is never ignored silently.
+"#,
+    }
+    CFG0011 {
+        title: "Body budget below the declared files",
+        message: "`body_size` of `{handler}` is {budget}, less than the {files} its `File` fields declare ({source})",
+        fix: "Remove `body_size` from the entry, so that the limit follows the declared files, or lower `max_size` on the fields.",
+        explanation: r#"
+A route with `File` fields gets a body limit computed from their `max_size` and
+`max_count`. A `body_size` in `budgets.toml` replaces it, and this one is smaller than the
+files the route declares: the declared limits could never be reached. Change one or the
+other, so that a single place says how large an upload can be.
+"#,
+    }
+    CFG0012 {
+        title: "Default page size above the maximum",
+        message: "`pagination.per_page` is {per_page}, above `pagination.max_per_page` ({max})",
+        fix: "Lower `pagination.per_page`, or raise `pagination.max_per_page`.",
+        explanation: r#"
+`pagination.per_page` is the page size when a client does not ask for one, and
+`pagination.max_per_page` the largest a client can ask for. A default above the maximum
+cannot be served. A route that needs other limits declares them on its attribute:
+`#[get("/exports", page(default = 500, max = 5000))]`.
+"#,
+    }
 }

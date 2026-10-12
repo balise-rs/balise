@@ -44,6 +44,10 @@ Sources, from highest to lowest priority:
 | `api.prefix` | `/api` | `BALISE_API_PREFIX` |
 | `api.version` | none | `BALISE_API_VERSION` |
 | `limits.body_size` | `2MB` | `BALISE_LIMITS_BODY_SIZE` |
+| `limits.timeout` | `30s` | `BALISE_LIMITS_TIMEOUT` |
+| `storage.dir` | `storage` | `BALISE_STORAGE_DIR` |
+| `pagination.per_page` | `20` | `BALISE_PAGINATION_PER_PAGE` |
+| `pagination.max_per_page` | `100` | `BALISE_PAGINATION_MAX_PER_PAGE` |
 | `log.format` | `text` in dev, `json` in test and prod | `BALISE_LOG_FORMAT` |
 | `log.level` | `info` | `BALISE_LOG_LEVEL` |
 
@@ -102,7 +106,7 @@ Optional, for small deployments without a reverse proxy: built-in TLS with autom
 
 From the review of the mock-up by agents (2026-10-11):
 
-- **The `FROM scratch` image** has no `/tmp` (uploads are streamed to temporary files), no CA certificates (SMTP, outgoing HTTPS), and runs as root. A distroless static image, or `scratch` with these added and a non-root user.
+- **The `FROM scratch` image** has no writable folder for `storage.dir` (uploads are streamed to `<storage.dir>/.uploads`, then stored there), no CA certificates (SMTP, outgoing HTTPS), and runs as root. A distroless static image, or `scratch` with these added and a non-root user.
 
 - Scope of a future `balise deploy` command (which targets).
 - Metrics format in production (Prometheus endpoint, OpenTelemetry, or both).

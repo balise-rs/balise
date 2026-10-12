@@ -32,11 +32,12 @@ string…). The answer is `400`.
     }
     VAL0003 {
         title: "Unsupported content type",
-        message: "The request body must be JSON, not `{content_type}`",
-        fix: "Send the body as JSON with the header `Content-Type: application/json`.",
+        message: "The request body must be {expected}, not `{content_type}`",
+        fix: "Send the body as {expected}, with that `Content-Type` header.",
         explanation: r#"
-The route reads a JSON body (`Body<T>`), and the request declares another content type.
-The answer is `415`. The generated client always sends JSON.
+A route reads its body (`Body<T>`) as JSON, or as `multipart/form-data` when its `Input` has
+`File` fields, and the request declares another content type. The answer is `415`. The
+generated client always sends the format the route expects.
 "#,
     }
     VAL0004 {

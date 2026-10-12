@@ -15,7 +15,7 @@ use toml::de::{DeTable, DeValue};
 
 use super::{Config, Environment, Kind, SETTINGS, Setting};
 use crate::error_codes::{
-    CFG0001, CFG0002, CFG0003, CFG0004, CFG0005, CFG0006, CFG0007, ErrorCode,
+    CFG0001, CFG0002, CFG0003, CFG0004, CFG0005, CFG0006, CFG0007, CFG0012, ErrorCode,
 };
 use crate::event::{Event, Level};
 
@@ -24,6 +24,8 @@ use crate::event::{Event, Level};
 pub struct Files {
     /// The text of `balise.toml`.
     pub config: &'static str,
+    /// The text of `budgets.toml`.
+    pub budgets: &'static str,
 }
 
 /// Why the configuration is read.
@@ -217,6 +219,21 @@ pub fn load_with(
             );
             problems.add(event, lenient && setting.kind == Kind::Safe);
         }
+    }
+
+    // Settings that depend on each other, once each is valid on its own.
+    let pagination = config.pagination;
+    if pagination.per_page > pagination.max_per_page {
+        let event = Event::coded(
+            Level::Error,
+            CFG0012,
+            &[
+                ("per_page", &pagination.per_page.to_string()),
+                ("max", &pagination.max_per_page.to_string()),
+            ],
+        );
+        problems.add(event, lenient);
+        config.pagination.per_page = pagination.max_per_page;
     }
 
     match problems.errors.is_empty() {
@@ -489,7 +506,7 @@ fn integer(text: &str, radix: u32) -> Option<i64> {
 }
 
 /// The line, from 1, of a byte offset.
-fn line_of(text: &str, offset: usize) -> usize {
+pub(crate) fn line_of(text: &str, offset: usize) -> usize {
     text[..offset.min(text.len())].matches('\n').count() + 1
 }
 
@@ -504,7 +521,7 @@ fn unknown_environment(name: &str, source: &Source) -> Event {
 }
 
 /// An error whose message ends with the closest valid name, when one is close enough.
-fn coded_with_suggestion(
+pub(crate) fn coded_with_suggestion(
     code: &'static ErrorCode,
     args: &[(&str, &str)],
     name: &str,
@@ -524,7 +541,10 @@ mod tests {
     use crate::log::Format;
 
     fn files(text: &'static str) -> Files {
-        Files { config: text }
+        Files {
+            config: text,
+            budgets: "",
+        }
     }
 
     fn vars(pairs: &[(&str, &str)]) -> Vec<(String, String)> {

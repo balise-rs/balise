@@ -3,7 +3,7 @@
 //! The generated code reads each field through `Fields`, checks its rules, and gathers every
 //! error before answering, so that a client can fix all of them at once.
 
-use balise_core::error_codes::CMP0008;
+use balise_core::error_codes::{CMP0008, CMP0017};
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::ext::IdentExt;
@@ -13,7 +13,7 @@ use syn::{Data, DeriveInput, Expr, Fields, Ident, Lit, LitInt, LitStr};
 
 use crate::error;
 
-const FIELD_ATTRIBUTES: &str = "`min`, `max`, `length(min = …, max = …)`, `email`, `url`, `one_of(\"a\", \"b\")`, `default = …`, `secret`";
+const FIELD_ATTRIBUTES: &str = "`min`, `max`, `length(min = …, max = …)`, `email`, `url`, `one_of(\"a\", \"b\")`, `default = …`, `secret`, and for files `max_size = …`, `types(…)`, `max_count = …`";
 const STRUCT_ATTRIBUTES: &str = "`model = …`, `allow_unknown_fields`";
 
 pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -40,12 +40,14 @@ pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut locals = Vec::new();
     let mut idents = Vec::new();
     let mut names = Vec::new();
+    let mut files = Vec::new();
     for field in fields {
         let ident = field.ident.as_ref().expect("named fields");
         let ty = &field.ty;
         let json_name = ident.unraw().to_string();
         let local = format_ident!("__balise_{}", json_name);
         let rules = FieldRules::parse(field)?;
+        let file = rules.file(field, &json_name)?;
 
         let read = match &rules.default {
             Some(default) => {
@@ -57,14 +59,24 @@ pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
                 };
                 quote_spanned!(ty.span()=> __balise_fields.read_or::<#ty>(#json_name, || #default))
             }
+            None if file.is_some() => {
+                quote_spanned!(ty.span()=> __balise_fields.read_file::<#ty>(#json_name))
+            }
             None => quote_spanned!(ty.span()=> __balise_fields.read::<#ty>(#json_name)),
         };
+        let inner = match file {
+            Some(_) => quote!(#private::FileField::inner),
+            None => quote!(#private::InputField::inner),
+        };
+        if let Some(spec) = file {
+            files.push(spec);
+        }
         let checks = rules.checks(&private);
         // Without rules, nothing reads the value: a type Balise cannot read is reported once.
         let checks = (!checks.is_empty()).then(|| {
             quote! {
                 if let ::core::option::Option::Some(__balise_value) =
-                    #local.as_ref().and_then(#private::InputField::inner)
+                    #local.as_ref().and_then(#inner)
                 {
                     #(__balise_fields.check(#json_name, #checks);)*
                 }
@@ -94,6 +106,8 @@ pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
 
     Ok(quote! {
         impl #private::Input for #name {
+            const FILES: &'static [#private::FileSpec] = &[#(#files),*];
+
             fn from_fields(
                 mut __balise_fields: #private::Fields,
             ) -> ::core::result::Result<Self, #private::FieldErrors> {
@@ -170,6 +184,9 @@ struct FieldRules {
     one_of: Option<(Ident, Vec<LitStr>)>,
     default: Option<Expr>,
     secret: bool,
+    max_size: Option<(Ident, LitStr)>,
+    types: Option<(Ident, Vec<LitStr>)>,
+    max_count: Option<(Ident, LitInt)>,
 }
 
 impl FieldRules {
@@ -255,6 +272,29 @@ impl FieldRules {
                         }
                     }
                     "secret" => rules.secret = true,
+                    "max_size" => {
+                        let size: LitStr = meta.value()?.parse()?;
+                        if rules.max_size.replace((ident.clone(), size)).is_some() {
+                            return Err(twice());
+                        }
+                    }
+                    "max_count" => {
+                        let count: LitInt = meta.value()?.parse()?;
+                        if rules.max_count.replace((ident.clone(), count)).is_some() {
+                            return Err(twice());
+                        }
+                    }
+                    "types" => {
+                        let content;
+                        syn::parenthesized!(content in meta.input);
+                        let values: Vec<LitStr> = content
+                            .parse_terminated(|input| input.parse::<LitStr>(), syn::Token![,])?
+                            .into_iter()
+                            .collect();
+                        if rules.types.replace((ident.clone(), values)).is_some() {
+                            return Err(twice());
+                        }
+                    }
                     "default" => {
                         let value: Expr = meta.value()?.parse()?;
                         if rules.default.replace(value).is_some() {
@@ -267,6 +307,117 @@ impl FieldRules {
             })?;
         }
         Ok(rules)
+    }
+
+    /// For a field that holds files, its `FileSpec`; `None` for other fields. Everything is
+    /// checked here, so that a wrong declaration never reaches the app.
+    fn file(&self, field: &syn::Field, name: &str) -> syn::Result<Option<TokenStream>> {
+        let declared = self.max_size.is_some() || self.types.is_some() || self.max_count.is_some();
+        let shape = file_shape(&field.ty);
+        let invalid = |span: Span, reason: &str| {
+            error(span, CMP0017, &[("field", name), ("reason", reason)], &[])
+        };
+        if !declared {
+            return match shape {
+                Some(_) => Err(invalid(
+                    field.ty.span(),
+                    "a file field declares its `max_size` and `types`",
+                )),
+                None => Ok(None),
+            };
+        }
+        let Some(shape) = shape else {
+            return Err(invalid(
+                field.ty.span(),
+                "`max_size`, `types` and `max_count` go on a field of type `File`, `Option<File>` or `Vec<File>`",
+            ));
+        };
+        let Some((_, size)) = &self.max_size else {
+            return Err(invalid(
+                field.ty.span(),
+                "it needs `max_size = \"…\"`, such as `\"5MB\"`",
+            ));
+        };
+        let max_size = balise_core::text::parse_size(&size.value())
+            .filter(|size| *size > 0)
+            .ok_or_else(|| {
+                invalid(
+                    size.span(),
+                    "`max_size` is a size such as `\"512KB\"`, `\"5MB\"` or `\"2GB\"`",
+                )
+            })? as u64;
+        let Some((types_ident, types)) = &self.types else {
+            return Err(invalid(
+                field.ty.span(),
+                "it needs `types(…)`, such as `types(\"image/png\", \"image/jpeg\")`",
+            ));
+        };
+        if types.is_empty() {
+            return Err(invalid(
+                types_ident.span(),
+                "`types(…)` lists at least one type",
+            ));
+        }
+        for mime in types {
+            if !balise_core::file::is_known(&mime.value()) {
+                let known = balise_core::file::known_types().join(", ");
+                let reason = format!(
+                    "Balise cannot recognize `{}` by its content; supported types: {known}",
+                    mime.value()
+                );
+                return Err(invalid(mime.span(), &reason));
+            }
+        }
+        let max_count: u32 = match (shape, &self.max_count) {
+            (FileShape::Many, Some((_, count))) => match count.base10_parse::<u32>() {
+                Ok(count) if count > 0 => count,
+                _ => {
+                    return Err(invalid(
+                        count.span(),
+                        "`max_count` is a whole number from 1",
+                    ));
+                }
+            },
+            (FileShape::Many, None) => {
+                return Err(invalid(
+                    field.ty.span(),
+                    "a `Vec<File>` declares how many files it takes: `max_count = 4`",
+                ));
+            }
+            (FileShape::One, Some((ident, _))) => {
+                return Err(invalid(
+                    ident.span(),
+                    "`max_count` goes on a `Vec<File>`; a `File` takes one file",
+                ));
+            }
+            (FileShape::One, None) => 1,
+        };
+        let rules = [
+            self.min.as_ref().map(|(i, _)| i),
+            self.max.as_ref().map(|(i, _)| i),
+            self.email.as_ref(),
+            self.url.as_ref(),
+            self.one_of.as_ref().map(|(i, _)| i),
+        ];
+        if let Some(ident) = rules.into_iter().flatten().next() {
+            let reason = format!("`{ident}` does not apply to files");
+            return Err(invalid(ident.span(), &reason));
+        }
+        if let Some(default) = &self.default {
+            return Err(invalid(
+                default.span(),
+                "a file field has no default; use `Option<File>`",
+            ));
+        }
+        let private = quote!(::balise::__private);
+        Ok(Some(quote! {
+            #private::FileSpec {
+                field: #name,
+                max_size: #max_size,
+                types: &[#(#types),*],
+                max_count: #max_count,
+            }
+        }))
     }
 
     /// One call per rule, each spanned on its attribute so that a rule on the wrong type
@@ -300,5 +451,35 @@ impl FieldRules {
             );
         }
         checks
+    }
+}
+
+/// How many files a field type holds, read from its syntax.
+#[derive(Clone, Copy)]
+enum FileShape {
+    /// `File` or `Option<File>`.
+    One,
+    /// `Vec<File>`.
+    Many,
+}
+
+fn file_shape(ty: &syn::Type) -> Option<FileShape> {
+    let syn::Type::Path(path) = ty else {
+        return None;
+    };
+    let segment = path.path.segments.last()?;
+    if segment.ident == "File" {
+        return Some(FileShape::One);
+    }
+    let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
+        return None;
+    };
+    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
+        return None;
+    };
+    match (segment.ident.to_string().as_str(), file_shape(inner)) {
+        ("Option", Some(FileShape::One)) => Some(FileShape::One),
+        ("Vec", Some(FileShape::One)) => Some(FileShape::Many),
+        _ => None,
     }
 }

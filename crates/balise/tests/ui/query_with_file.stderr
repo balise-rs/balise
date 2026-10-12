@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: CMP0017: an `Input` with `File` fields is read with `Body<T>`, never `Query<T>`; more: balise explain CMP0017
+  --> tests/ui/query_with_file.rs:10:33
+   |
+10 | async fn search(_filters: Query<Upload>) -> NoContent {
+   |                                 ^^^^^^ evaluation of `_` failed here

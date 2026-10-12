@@ -6,13 +6,13 @@
       "name": "Page<T>",
       "kind": "type",
       "summary": "Return type of a paginated list, cursor pagination by default",
-      "example": "async fn list(page: Query<PageParams>, user: CurrentUser, db: Db) -> Result<Page<OrderView>> {\n    Ok(Order::query().owned_by(&user).page(db, page).await?.into())\n}"
+      "example": "async fn list(page: PageParams, user: CurrentUser, db: Db) -> Result<Page<OrderView>> {\n    Ok(Order::query().owned_by(&user).page(db, page).await?.into())\n}"
     },
     {
       "name": "PageParams",
       "kind": "type",
       "summary": "The page requested by the client (cursor, per_page)",
-      "usage": "Query<PageParams>"
+      "usage": "page: PageParams"
     },
     {
       "name": "page_numbered",

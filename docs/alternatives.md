@@ -34,6 +34,7 @@ Option A is the one implemented first.
 | 2026-10-10 | Middleware | Tower, internally | Small in-house model | Compile, runtime | to test |
 | 2026-10-10 | Handlers | Type erasure (`dyn`) after extraction | Fully monomorphized | Compile, runtime | to test |
 | 2026-10-10 | Route collection | Distributed slices (`linkme`), behind Balise's registry module | Registration at startup (`inventory`), or an in-house linker-section module | Compile, reliability across linkers | A implemented; to measure once the reference project compiles |
+| 2026-10-12 | Multipart parsing | In-house streaming parser | `multer` | Compile (its dependencies in every project), runtime on large uploads, robustness on malformed bodies | to test |
 
 ### Application API
 
