@@ -52,7 +52,7 @@ jobs:
 
       # A signal, never a failure: lists versions younger than 7 days with the command to pin them.
       - name: Release age (report only)
-        run: cargo run -q -p release-age -- Cargo.lock bench/placeholder/Cargo.lock
+        run: cargo run -q -p release-age -- Cargo.lock
 
   compile-bench:
     needs: check
@@ -75,8 +75,11 @@ jobs:
           key: bench-${{ github.sha }}
           restore-keys: bench-
 
+      # The web variant until the full reference project compiles; its results have their own
+      # file, so they are never compared with another variant's.
       - name: Measure compile times
         run: |
           cargo build --release -p compile-bench
-          target/release/compile-bench measure bench/placeholder \
-            --baseline bench-results/last.txt --out bench-results/last.txt
+          target/release/compile-bench generate target/bench/web --variant web
+          target/release/compile-bench measure target/bench/web \
+            --baseline bench-results/web.txt --out bench-results/web.txt

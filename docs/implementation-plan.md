@@ -49,10 +49,7 @@ Done !
 Done !
 
 ### 3.3 Extractors, validation, Input and Output
-Implement `Path`, `Query`, `Body`, `RequestId` and the `Input` / `Output` derives with their validation attributes. Validation errors return a `422` with one message per field. As soon as routes and extractors compile, the reference project (or the part it can already build) joins the compile benchmark, and every later API change is measured.
-- More: [application.md](application.md#parameters)
-- Done: extractors and their unwrapping, one code per field cause, `Input` / `Output` derives with validation and `Patch<T>`. Next: the benchmark's "web" variant.
-- Later, with the ORM: `#[input(model = …)]` applies the model's rules and `Patch` gets `apply_to`; until then the attribute only checks that the model exists. Identifiers, enums and dates become field types with their models.
+Done !
 
 ### 3.4 Response and error format
 Map return types to statuses (`Created`, `NoContent`, `Page`…) and errors to the single error body. Implement `#[derive(AppError)]`. The response files of `mockup/outputs/` are checked end to end on the mock-up's routes.
@@ -143,6 +140,7 @@ Implement `#[derive(Model)]`, typed prefixed UUIDv7 ids, timestamps, and the sch
 - To decide: database drivers, the first that works ([alternatives.md](alternatives.md))
 - To handle: prefix collisions and parsing errors for prefixed ids ([data.md](data.md#open-questions))
 - The owner field is checked by the compiler; `NewOrder`, `Insert<Order>` and `with_<field>` are generated with the model ([data.md](data.md#naming))
+- Ids, enums and dates become `Input` / `Output` field types; `#[input(model = …)]`, which only checks that the model exists so far, applies the model's rules
 
 ### 6.2 Migrations
 Generate migrations from the snapshot diff, with three-step data migrations, `balise rename`, rename questions, one draft regenerated freely and frozen by `balise migrate freeze` (squash and resource removal rewrite it), compatible / breaking classification, failure instead of questions, and `balise remove resource`. Show a summary before applying.
@@ -176,6 +174,7 @@ Deduce relations from foreign keys, implement `.with()`, `get_many` and the load
 ### 6.6 Writes and transactions
 Implement the lazy transaction per request, deferred side effects, patch inputs, closure updates, atomic operations, bulk writes and upsert.
 - More: [data.md](data.md#writes-and-transactions)
+- `Patch<T>` exists; the `Input` derive generates `apply_to` for inputs with `#[input(model = …)]`
 - Also: `Locked<Order>` from `.for_update()`, the deadlock code, `db.independent()` (queued on SQLite), the mail outbox, `db.after_commit`, `spawn(|db| …)` ([data.md](data.md#writes-and-transactions))
 
 ### 6.7 Pagination

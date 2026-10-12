@@ -1,0 +1,13 @@
+# The template resource of the compile benchmark's "web" variant: `compile-bench generate
+# --variant web` copies `src/orders` once per resource. Part of the workspace, so that every
+# change to Balise's API is checked against it.
+[package]
+name = "web-template"
+description = "Template resource for the compile benchmark's web variant"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+balise.workspace = true

@@ -51,9 +51,10 @@ Cold scenarios run once. Edit scenarios run once to warm up, then five times; th
 
 - `bench/compile-bench` generates the reference project and measures a project:
   - `cargo run --release -p compile-bench -- generate target/bench/reference [--resources N]` copies the mock-up's `orders` resource once per resource, renamed (`Order` → `Invoice`, `ORD0001` → `INV0001`…), with the rest of the mock-up as is. The front end is left out.
+  - `--variant web` builds the project from `bench/web-template` instead: what Balise can already compile (routes, `Path`, `Query`, `Body`, `Input`, `Output`, `Patch`), six routes per resource, 48 with the default 8 resources. The template is a workspace member, so every API change is checked against it in CI, and the generated project uses the repository's `Cargo.lock`.
   - `cargo run --release -p compile-bench -- measure <project> [--runs N] [--baseline FILE] [--out FILE]` measures and compares with a previous result.
-- The project marks where to edit with comment lines, inserted by the generator in the reference project: `// bench:body` inside a handler body, `// bench:field` inside an `Input` struct, `// bench:model` inside a model. A field is added at each marker, so these structs must never be built with a literal.
-- Until the reference project compiles, CI measures `bench/placeholder`: one resource shaped like a Balise one, without the framework's macros.
+- The project marks where to edit with comment lines, inserted by the generator in the reference project: `// bench:body` inside a handler body, `// bench:field` inside an `Input` struct, `// bench:model` inside a model. A public field is added at each marker, so these structs must never be built with a literal without `..` (struct update).
+- Until the full reference project compiles, CI measures the web variant. Its results are kept in their own file, never compared with another variant's.
 
 ## Dedicated phase
  

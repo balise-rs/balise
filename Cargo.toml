@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "bench/compile-bench", "tools/release-age"]
+members = ["crates/*", "bench/compile-bench", "bench/web-template", "tools/release-age"]
 resolver = "3"
 
 [workspace.package]
@@ -10,6 +10,7 @@ repository = "https://github.com/balise-rs/balise"
 publish = false
 
 [workspace.dependencies]
+balise = { path = "crates/balise" }
 balise-core = { path = "crates/balise-core" }
 balise-macros = { path = "crates/balise-macros" }
 balise-engine = { path = "crates/balise-engine" }

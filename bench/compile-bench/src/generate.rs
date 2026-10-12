@@ -1,16 +1,42 @@
-//! `compile-bench generate`: the reference project, built from the mock-up.
+//! `compile-bench generate`: the reference project.
 //!
-//! The mock-up's `orders` resource is the template: it is copied once per resource and renamed,
-//! so the reference project follows the mock-up whenever it changes. The rest of the mock-up
-//! (`users`, `auth`, seeds, configuration) is copied as is. The front end is left out: only
-//! Rust is measured.
+//! Two variants, each built from a template resource copied once per resource and renamed:
+//! - `full`, from the mock-up: its `orders` resource is the template, and the rest (`users`,
+//!   `auth`, seeds, configuration) is copied as is, so the reference project follows the
+//!   mock-up whenever it changes. The front end is left out: only Rust is measured.
+//! - `web`, from `bench/web-template`, embedded here: what Balise can already build (routes,
+//!   extractors, `Input`, `Output`). CI measures it until the full variant compiles.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::measure::{BODY_MARKER, FIELD_MARKER, MODEL_MARKER, collect_rust_files};
 
-pub const USAGE: &str = "compile-bench generate <out> [--resources N] [--mockup DIR]";
+pub const USAGE: &str =
+    "compile-bench generate <out> [--variant full|web] [--resources N] [--mockup DIR]";
+
+/// The web variant's files, relative to `src`. The template resource is `orders`.
+const WEB_TEMPLATE: &[(&str, &str)] = &[
+    ("main.rs", include_str!("../../web-template/src/main.rs")),
+    (
+        "orders/mod.rs",
+        include_str!("../../web-template/src/orders/mod.rs"),
+    ),
+    (
+        "orders/api.rs",
+        include_str!("../../web-template/src/orders/api.rs"),
+    ),
+    (
+        "orders/model.rs",
+        include_str!("../../web-template/src/orders/model.rs"),
+    ),
+];
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Variant {
+    Full,
+    Web,
+}
 
 /// Default number of resources: with `auth`, about 50 routes.
 const DEFAULT_RESOURCES: usize = 8;
@@ -68,9 +94,17 @@ pub fn main(mut args: impl Iterator<Item = String>) -> Result<(), String> {
     let mut out = None;
     let mut resources = DEFAULT_RESOURCES;
     let mut mockup = PathBuf::from("mockup");
+    let mut variant = Variant::Full;
     while let Some(arg) = args.next() {
         let mut value = || args.next().ok_or(format!("{arg} needs a value"));
         match arg.as_str() {
+            "--variant" => {
+                variant = match value()?.as_str() {
+                    "full" => Variant::Full,
+                    "web" => Variant::Web,
+                    other => return Err(format!("unknown variant `{other}`: full or web")),
+                }
+            }
             "--resources" => {
                 resources = value()?.parse().map_err(|_| "--resources needs a number")?
             }
@@ -80,25 +114,33 @@ pub fn main(mut args: impl Iterator<Item = String>) -> Result<(), String> {
         }
     }
     let out = out.ok_or(format!("usage: {USAGE}"))?;
-    generate(&mockup, &out, resources)?;
+    match variant {
+        Variant::Full => generate(&mockup, &out, resources)?,
+        Variant::Web => generate_web(&mockup, &out, resources)?,
+    }
     println!(
-        "reference project with {resources} resources in {}",
+        "reference project ({variant:?}) with {resources} resources in {}",
         out.display()
     );
     Ok(())
 }
 
-fn generate(mockup: &Path, out: &Path, resources: usize) -> Result<(), String> {
-    if resources == 0 || resources > RESOURCES.len() {
+/// The first `count` resources, after emptying `out`.
+fn prepare(out: &Path, count: usize) -> Result<&'static [Names], String> {
+    if count == 0 || count > RESOURCES.len() {
         return Err(format!(
             "--resources must be between 1 and {}",
             RESOURCES.len()
         ));
     }
-    let resources = &RESOURCES[..resources];
     if out.exists() {
         fs::remove_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;
     }
+    Ok(&RESOURCES[..count])
+}
+
+fn generate(mockup: &Path, out: &Path, resources: usize) -> Result<(), String> {
+    let resources = prepare(out, resources)?;
 
     write(&out.join("Cargo.toml"), &manifest(mockup)?)?;
     copy(&mockup.join("balise.toml"), &out.join("balise.toml"))?;
@@ -115,6 +157,46 @@ fn generate(mockup: &Path, out: &Path, resources: usize) -> Result<(), String> {
     for names in resources {
         let dir = out.join("src").join(names.plural);
         copy_dir(&template, &dir, |text| rename(text, names))?;
+    }
+    insert_markers(&out.join("src").join(TEMPLATE.plural))
+}
+
+fn generate_web(mockup: &Path, out: &Path, resources: usize) -> Result<(), String> {
+    let resources = prepare(out, resources)?;
+    let repository = mockup.join("..");
+    let facade = fs::canonicalize(repository.join("crates/balise"))
+        .map_err(|e| format!("Balise's facade next to {}: {e}", mockup.display()))?;
+    write(
+        &out.join("Cargo.toml"),
+        &format!(
+            "[package]\nname = \"reference-web\"\nversion = \"0.0.0\"\nedition = \"2024\"\npublish = false\n\n\
+             [dependencies]\nbalise = {{ path = {:?} }}\n\n[workspace]\n",
+            facade.display().to_string()
+        ),
+    )?;
+    // The repository's lockfile: the same dependency versions as Balise's own build.
+    copy(&repository.join("Cargo.lock"), &out.join("Cargo.lock"))?;
+
+    let template_mod = format!("mod {};", TEMPLATE.plural);
+    for (file, text) in WEB_TEMPLATE {
+        if *file == "main.rs" {
+            let mods: Vec<String> = resources
+                .iter()
+                .map(|names| format!("mod {};", names.plural))
+                .collect();
+            write(
+                &out.join("src/main.rs"),
+                &text.replace(&template_mod, &mods.join("\n")),
+            )?;
+            continue;
+        }
+        let relative = file
+            .strip_prefix(&format!("{}/", TEMPLATE.plural))
+            .ok_or(format!("{file} is outside the template resource"))?;
+        for names in resources {
+            let path = out.join("src").join(names.plural).join(relative);
+            write(&path, &rename(text, names))?;
+        }
     }
     insert_markers(&out.join("src").join(TEMPLATE.plural))
 }
@@ -364,6 +446,33 @@ mod tests {
                 path.display()
             );
         }
+    }
+
+    #[test]
+    fn the_web_variant_has_six_routes_per_resource_and_its_markers() {
+        let project = std::env::temp_dir().join("compile-bench-tests/web");
+        generate_web(&mockup(), &project, DEFAULT_RESOURCES).unwrap();
+        let files = sources(&project);
+        let all: String = files.iter().map(|(_, text)| text.as_str()).collect();
+        let routes = ["#[get(", "#[post(", "#[patch(", "#[delete("]
+            .iter()
+            .map(|attribute| all.matches(attribute).count())
+            .sum::<usize>();
+        assert_eq!(routes, 6 * DEFAULT_RESOURCES);
+        for marker in [BODY_MARKER, FIELD_MARKER, MODEL_MARKER] {
+            assert_eq!(
+                all.matches(marker).count(),
+                1,
+                "`{marker}` must appear once"
+            );
+        }
+        let main = &files
+            .iter()
+            .find(|(p, _)| p.ends_with("main.rs"))
+            .unwrap()
+            .1;
+        assert!(main.contains("mod invoices;"), "{main}");
+        assert!(project.join("Cargo.lock").exists());
     }
 
     #[test]

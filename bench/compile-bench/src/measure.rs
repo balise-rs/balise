@@ -3,7 +3,8 @@
 //! The project marks where to edit with two comment lines:
 //! - `// bench:body` inside a function body: replaced by a statement;
 //! - `// bench:field` inside an input struct, and `// bench:model` inside a model struct:
-//!   replaced by a field, so these structs must never be built with a literal.
+//!   replaced by a public field, so these structs must never be built with a literal without
+//!   `..` (struct update).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -100,14 +101,14 @@ fn run(args: Args) -> Result<(), String> {
     record(
         "field_edit_check",
         median(args.runs, |i| {
-            field.apply(&format!("bench_field_{i}: u32,"))?;
+            field.apply(&format!("pub bench_field_{i}: u32,"))?;
             cargo(project, "check")
         })?,
     );
     record(
         "model_edit_check",
         median(args.runs, |i| {
-            model.apply(&format!("bench_field_{i}: u32,"))?;
+            model.apply(&format!("pub bench_field_{i}: u32,"))?;
             cargo(project, "check")
         })?,
     );
