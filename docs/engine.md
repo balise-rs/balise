@@ -78,7 +78,7 @@ Strict in dev, fail at startup in prod for what matters, never fail at runtime.
  
 - Balise never falls back silently on a setting that affects security or data. A service that starts in an unsafe state is worse than one that does not start.
 - Failing at startup in prod does not cause downtime: during a rolling deployment, the orchestrator keeps the previous version running because the new one never becomes ready.
-- `balise config check --env prod` runs the same validation without starting the app, so CI catches a bad production config before deployment.
+- `balise config check --env prod` runs the same validation without starting the app, so CI catches a bad production config before deployment. It is never more lenient than a startup: every problem is an error, even those that only warn when production starts.
 - At runtime, nothing in configuration can make a request fail: everything is validated once, at startup.
 ## Routing
  

@@ -34,9 +34,11 @@ mod orders;
 mod users;
 
 fn main() {
-    balise::run();
+    balise::run!();
 }
 ```
+
+`balise::run!()` embeds `balise.toml`, which sits next to `Cargo.toml`, in the binary: a deployment needs nothing else, and environment variables override it. A missing, misplaced or malformed `balise.toml` is a compile error (`CMP0013`, `CMP0014`).
  
 If the app needs shared state, declare it here (see [Shared state](#shared-state)):
  
@@ -50,7 +52,7 @@ fn main() {
 }
 ```
  
-`main.rs` contains nothing else than module declarations and this call. Configuration comes from environment variables and `balise.toml`, not from code.
+`main.rs` contains nothing else than module declarations and this call. Configuration comes from environment variables and `balise.toml`, not from code ([environments.md](environments.md#configuration)).
  
 ## Routes and handlers
  
@@ -334,4 +336,4 @@ Investigate through Balise, never in the framework's dependencies. Everything be
 ## Open questions
 
 From the review of the mock-up by agents (2026-10-11):
-
+- **Declaring shared state with `balise::run!()`**: the start is a macro, so the builder shown in [Starting the app](#starting-the-app) (`balise::app().state(…).run()`) cannot end with it as written.

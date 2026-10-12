@@ -79,3 +79,4 @@ Option A is the one implemented first.
 | 2026-10-10 | Codegen backend in dev | LLVM | Cranelift (nightly) | Compile | to test |
 | 2026-10-10 | Production binary | musl with mimalloc | glibc in a distroless image | Runtime, image size | to test |
 | 2026-10-10 | Production findings | In-memory summary by fingerprint, written periodically | No summary: report built from collected logs only | Runtime (overhead on requests), completeness of reports | to test |
+| 2026-10-12 | `config check` | A command of the app's binary: needs a build, one validation path | Validation in the `balise` CLI from `balise.toml` and the enabled features: no build | CI time, risk of the two paths diverging | to test |

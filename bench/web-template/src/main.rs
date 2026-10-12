@@ -4,5 +4,5 @@
 mod orders;
 
 fn main() {
-    balise::run();
+    balise::run!();
 }

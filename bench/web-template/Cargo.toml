@@ -11,3 +11,8 @@ publish.workspace = true
 
 [dependencies]
 balise.workspace = true
+
+# Enabled by `balise dev`: `cargo run -p web-template --features dev` runs in the dev
+# environment. Without it, the binary runs in production.
+[features]
+dev = ["balise/dev"]

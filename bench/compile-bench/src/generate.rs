@@ -15,9 +15,14 @@ use crate::measure::{BODY_MARKER, FIELD_MARKER, MODEL_MARKER, collect_rust_files
 pub const USAGE: &str =
     "compile-bench generate <out> [--variant full|web] [--resources N] [--mockup DIR]";
 
-/// The web variant's files, relative to `src`. The template resource is `orders`.
+/// The web variant's files, relative to `src` (`../` for the project's root). The template
+/// resource is `orders`.
 const WEB_TEMPLATE: &[(&str, &str)] = &[
     ("main.rs", include_str!("../../web-template/src/main.rs")),
+    (
+        "../balise.toml",
+        include_str!("../../web-template/balise.toml"),
+    ),
     (
         "orders/mod.rs",
         include_str!("../../web-template/src/orders/mod.rs"),
@@ -179,6 +184,10 @@ fn generate_web(mockup: &Path, out: &Path, resources: usize) -> Result<(), Strin
 
     let template_mod = format!("mod {};", TEMPLATE.plural);
     for (file, text) in WEB_TEMPLATE {
+        if let Some(root_file) = file.strip_prefix("../") {
+            write(&out.join(root_file), text)?;
+            continue;
+        }
         if *file == "main.rs" {
             let mods: Vec<String> = resources
                 .iter()

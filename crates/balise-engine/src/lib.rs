@@ -3,6 +3,10 @@
 //! hyper and Tokio are used here and nowhere else. Nothing from them crosses this crate's
 //! boundary into the facade: errors leave as Balise events with their codes.
 
+mod start;
+
+pub use start::start;
+
 use std::convert::Infallible;
 use std::io;
 use std::net::SocketAddr;
@@ -20,7 +24,7 @@ use balise_core::error_codes::{
 };
 use balise_core::event::{Event, Level, RequestLine};
 use balise_core::handler::{self, Method};
-use balise_core::log::{self, Logger, RequestContext};
+use balise_core::log::{self, RequestContext};
 use balise_core::registry::{self, Route};
 use balise_core::router::{Match, Router};
 use balise_core::text::format_size;
@@ -42,7 +46,6 @@ const REPORT_PERIOD: Duration = Duration::from_secs(1);
 /// Builds the router from the registered routes, starts the runtime and serves. Never
 /// returns: on a fatal error, reports it and exits with a non-zero code.
 pub fn run(config: Config) -> ! {
-    log::install(Logger::stdout(config.log_format, config.log_level));
     if let Err(event) = error_codes::check_app_codes() {
         fail(event);
     }
@@ -61,7 +64,7 @@ pub fn run(config: Config) -> ! {
         ),
     };
     runtime.block_on(async {
-        match bind(&config.address).await {
+        match bind(&config.address()).await {
             Ok(listener) => serve(listener, server).await,
             Err(event) => fail(event),
         }
@@ -233,7 +236,7 @@ pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
                         method,
                         path,
                         status: response.status,
-                        duration_ms: started.elapsed().as_millis() as u64,
+                        duration_us: started.elapsed().as_micros() as u64,
                         queries: None,
                     };
                     log_request(line, &request_id, route, &mut response);

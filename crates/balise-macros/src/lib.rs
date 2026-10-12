@@ -11,6 +11,7 @@ mod app_error;
 mod input;
 mod output;
 mod route;
+mod run;
 
 use route::route;
 
@@ -62,6 +63,21 @@ pub fn derive_output(item: TokenStream) -> TokenStream {
 #[proc_macro_derive(AppError, attributes(error))]
 pub fn derive_app_error(item: TokenStream) -> TokenStream {
     derive(item, app_error::expand)
+}
+
+/// Embeds the project's files and starts the app. Called by `balise::run!()`.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __run(input: TokenStream) -> TokenStream {
+    let input = proc_macro2::TokenStream::from(input);
+    let result = match input.is_empty() {
+        true => run::expand(),
+        false => Err(syn::Error::new_spanned(
+            input,
+            "`balise::run!()` takes no arguments",
+        )),
+    };
+    result.unwrap_or_else(syn::Error::into_compile_error).into()
 }
 
 fn derive(

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Literals that only `Config`'s defaults may contain.
-const FORBIDDEN: &[&str] = &["\"/api", ":3000", "3000\"", "2 MB", "2 * 1024"];
+const FORBIDDEN: &[&str] = &["\"/api", ":3000", "3000\"", "3000,", "2 MB", "2 * 1024"];
 
 #[test]
 fn only_config_has_the_defaults() {
@@ -16,7 +16,7 @@ fn only_config_has_the_defaults() {
     }
     let mut found = Vec::new();
     for file in files {
-        if file.ends_with("balise-core/src/config.rs") {
+        if file.ends_with("balise-core/src/config/mod.rs") {
             continue;
         }
         let text = fs::read_to_string(&file).unwrap();

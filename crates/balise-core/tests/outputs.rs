@@ -56,11 +56,12 @@ fn summary(
     error: Option<&Error>,
 ) -> Event {
     let (method, path, status, duration_ms, queries) = line;
+    let duration_us = duration_ms * 1000;
     let line = RequestLine {
         method: method.into(),
         path: path.into(),
         status,
-        duration_ms,
+        duration_us,
         queries: Some(queries),
     };
     let mut event = Event::request(line, request_id);

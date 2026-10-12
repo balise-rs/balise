@@ -38,13 +38,18 @@ Paths in route attributes never include the API prefix: `#[get("/orders")]` is s
     HTTP0004 {
         title: "Not allowed to listen",
         message: "Cannot listen on {address}: permission denied",
-        fix: "Use a port above 1024: lower ports need special rights.",
+        fix: "Use a port above 1024 (`PORT=8080`), or give the app the right to use low ports: on Linux, `sudo setcap cap_net_bind_service=+ep <binary>`.",
         explanation: r#"
 The system refused to let the app listen on this address. On Linux and macOS, ports below
-1024 are reserved to privileged processes.
+1024 are reserved to privileged processes; Balise does not forbid them, the system does.
 
-Run the app on a higher port, and let a reverse proxy, or the container's port mapping,
-expose port 80 or 443.
+To serve on port 80 or 443:
+
+- in a container, the app's user may bind them, or the container's port mapping can expose
+  the app's port as 80 (`-p 80:<port>`);
+- on Linux, give the binary the right without running it as root:
+  `sudo setcap cap_net_bind_service=+ep <binary>` (again after each build);
+- behind a reverse proxy, the proxy listens on 80 or 443 and the app on a higher port.
 "#,
     }
     HTTP0005 {

@@ -85,15 +85,15 @@ async fn requests_are_logged_once_in_balise_format() {
          cause: invalid digit found in string
          fix: Read the original cause. If it comes from Balise or one of its dependencies, report it so it gets its own code.
          more: balise explain EXT0001
-<time>  GET /api/orders/7 → request <req> (logs::get returned 500 in <ms> ms)
-<time>  POST /api/reset → request <req> (logs::reset returned 422 in <ms> ms)
+<time>  GET /api/orders/7 → request <req> (logs::get returned 500 in <ms>)
+<time>  POST /api/reset → request <req> (logs::reset returned 422 in <ms>)
           VAL0001  Invalid fields: password
           in logs::reset
           fields:
             password: VAL0005 must be a whole number, 0 or more, not ***
           fix: Fix each field listed in `fields`: each one has its own code and message.
           more: balise explain VAL0001
-<time>  GET /api/missing → request <req> (no handler, 404 in <ms> ms)
+<time>  GET /api/missing → request <req> (no handler, 404 in <ms>)
           HTTP0003  No route for GET /api/missing
           fix: Check the method and the path. `balise routes` lists the routes of the app.
           more: balise explain HTTP0003"#,
@@ -124,13 +124,12 @@ fn normalize(text: &str) -> String {
             while let Some(start) = line.find("req_").filter(|_| !line.contains("req_<")) {
                 line.replace_range(start..start + 10, "<req>");
             }
-            if let Some(start) = line.find(" in ")
-                && let Some(end) = line[start + 4..].find(" ms")
-                && line[start + 4..start + 4 + end]
-                    .bytes()
-                    .all(|b| b.is_ascii_digit())
+            // `in 312 µs)` or `in 4.6 ms)`.
+            if let Some(start) = line.rfind(" in ")
+                && let Some(end) = line[start..].find(')')
+                && (line[..start + end].ends_with(" ms") || line[..start + end].ends_with(" µs"))
             {
-                line.replace_range(start + 4..start + 4 + end, "<ms>");
+                line.replace_range(start + 4..start + end, "<ms>");
             }
             line
         })

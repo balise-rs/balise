@@ -123,8 +123,10 @@ impl Fields {
     pub fn finish(mut self, known: &[&str], allow_unknown: bool) -> FieldErrors {
         if !allow_unknown {
             for (name, _) in std::mem::take(&mut self.entries) {
-                self.errors
-                    .push(FieldError::unknown(&name, closest(&name, known)));
+                self.errors.push(FieldError::unknown(
+                    &name,
+                    crate::text::closest(&name, known),
+                ));
             }
         }
         self.errors
@@ -134,31 +136,6 @@ impl Fields {
         let index = self.entries.iter().position(|(known, _)| known == name)?;
         Some(self.entries.remove(index).1)
     }
-}
-
-/// The declared name closest to a typo, if one is close enough: `quantiy` gives `quantity`.
-fn closest<'a>(name: &str, known: &[&'a str]) -> Option<&'a str> {
-    known
-        .iter()
-        .map(|candidate| (distance(name, candidate), *candidate))
-        .filter(|(distance, candidate)| *distance <= (candidate.len() / 3).max(1))
-        .min_by_key(|(distance, _)| *distance)
-        .map(|(_, candidate)| candidate)
-}
-
-/// The number of single-character edits from `a` to `b`.
-fn distance(a: &str, b: &str) -> usize {
-    let b: Vec<char> = b.chars().collect();
-    let mut previous: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.chars().enumerate() {
-        let mut current = vec![i + 1];
-        for (j, cb) in b.iter().enumerate() {
-            let substitution = previous[j] + usize::from(ca != *cb);
-            current.push(substitution.min(previous[j + 1] + 1).min(current[j] + 1));
-        }
-        previous = current;
-    }
-    previous[b.len()]
 }
 
 /// Why one field did not pass.

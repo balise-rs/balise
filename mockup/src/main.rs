@@ -6,5 +6,5 @@ mod users;
 mod seeds;
 
 fn main() {
-    balise::run();
+    balise::run!();
 }

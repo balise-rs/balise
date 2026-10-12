@@ -15,26 +15,27 @@ pub use balise_core::input::Patch;
 pub use balise_core::response::{Created, NoContent, Redirect};
 pub use balise_macros::{AppError, Input, Output, delete, get, patch, post, put};
 
-/// Starts the app: the server listens and serves until the process stops.
+/// Starts the app: the server listens and serves until the process stops. The whole of
+/// `main.rs`, after the module declarations:
 ///
-/// ```no_run
+/// ```ignore
 /// fn main() {
-///     balise::run();
+///     balise::run!();
 /// }
 /// ```
 ///
-/// It never returns. If the app cannot start (the port is taken, two handlers claim the same
-/// route…), the error is reported with its code and the process exits.
-#[allow(clippy::needless_doctest_main)] // the example is the application's whole main.rs
-pub fn run() -> ! {
-    let config = match balise_core::config::Config::load() {
-        Ok(config) => config,
-        Err(event) => {
-            event.emit();
-            std::process::exit(1)
-        }
+/// It embeds the project's configuration (`balise.toml`, next to `Cargo.toml`) in the binary,
+/// so that a deployment needs nothing else; environment variables override it. It never
+/// returns: if the app cannot start (an invalid setting, the port is taken…), the error is
+/// reported with its code and the process exits.
+///
+/// The binary also answers `config check [--env NAME]`, which checks the configuration of an
+/// environment with the strictest rules and exits.
+#[macro_export]
+macro_rules! run {
+    () => {
+        $crate::__private::__run!()
     };
-    balise_engine::run(config)
 }
 
 /// Logs from application code, in the same format as Balise's own events, with the
@@ -101,6 +102,7 @@ macro_rules! __log_error {
 /// Used by the code that Balise's macros generate. Not part of the API: never use it directly.
 #[doc(hidden)]
 pub mod __private {
+    pub use balise_core::config::Files;
     pub use balise_core::error::Error;
     pub use balise_core::error_codes::ErrorCode;
     pub use balise_core::event::Level;
@@ -114,4 +116,18 @@ pub mod __private {
     pub use balise_core::output::{Output, OutputValue, write_field};
     pub use balise_core::registry::{Route, routes};
     pub use balise_core::{__register_app_code, __register_route};
+    pub use balise_macros::__run;
+
+    /// Starts the app, in the environment this build is for unless `BALISE_ENV` says otherwise.
+    pub fn start(files: Files) -> ! {
+        use balise_core::config::Environment;
+        let build = if cfg!(feature = "dev") {
+            Environment::Dev
+        } else if cfg!(feature = "test") {
+            Environment::Test
+        } else {
+            Environment::Prod
+        };
+        balise_engine::start(files, build)
+    }
 }

@@ -144,4 +144,29 @@ so its value is text, a number, a boolean, or an `Option` of one of them. Other 
 converted first, usually with `.to_string()`.
 "#,
     }
+    CMP0013 {
+        title: "balise.toml not found",
+        message: "`balise::run!()` cannot find balise.toml: {reason}",
+        fix: "Put `balise.toml` next to `Cargo.toml`; `balise new` creates it, and it may hold only comments.",
+        explanation: r#"
+`balise::run!()`, in `main.rs`, embeds `balise.toml` in the binary, so that a deployment
+needs nothing but the binary: the production image never misses its configuration. The
+file is read next to `Cargo.toml`, nowhere else. When a file with a close name, or a
+`balise.toml` in another folder, exists, the message names it.
+
+Values that differ between deployments (ports, secrets) come from environment variables,
+which override the embedded file.
+"#,
+    }
+    CMP0014 {
+        title: "balise.toml is not valid TOML",
+        message: "balise.toml is not valid TOML: {reason}",
+        fix: "Fix the line the message names: a `key = value` per line, text in double quotes, sections written `[name]`.",
+        explanation: r#"
+`balise::run!()` reads `balise.toml` when the app is compiled, so a syntax error is reported
+by `cargo check` and `balise check`, before the app runs. Whether each key and value makes
+sense is checked when the app starts, by the rules of its environment (`CFG` codes), and
+by `config check`.
+"#,
+    }
 }

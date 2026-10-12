@@ -1,0 +1,9 @@
+error: CMP0013: `balise::run!()` cannot find balise.toml: there is none next to `Cargo.toml`
+         fix: Put `balise.toml` next to `Cargo.toml`; `balise new` creates it, and it may hold only comments.
+         more: balise explain CMP0013
+ --> tests/ui/run_without_config.rs:2:5
+  |
+2 |     balise::run!();
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `$crate::__private::__run` which comes from the expansion of the macro `balise::run` (in Nightly builds, run with -Z macro-backtrace for more info)

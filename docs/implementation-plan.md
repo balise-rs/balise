@@ -58,18 +58,17 @@ Done !
 Done !
 
 ### 3.6 Configuration and environments
-Load configuration from environment variables and `balise.toml` with the dev / prod rules, and the `dev` feature guard. Add `balise config check`.
-- More: [engine.md](engine.md#configuration), [environments.md](environments.md#configuration)
-- `Config.error_details` (location, fix and cause in error responses, off by default) follows the environment: on in dev only
+Done !
 
 ### 3.7 Shared state, blocking, spawn
 Implement `.state()`, `State<T>`, `Shared<T>`, `balise::blocking` and `balise::spawn`. Detect tasks that hold the event loop in dev.
 - More: [application.md](application.md#shared-state), [engine.md](engine.md#execution-model)
 - To decide: multi-threaded runtime or `spawn_local` per core ([alternatives.md](alternatives.md))
+- To decide: how state is declared now that the start is `balise::run!()` ([application.md](application.md#open-questions))
 - Handlers run in their own task, so a client disconnect does not cancel them; timeouts still do ([engine.md](engine.md#execution-model))
 
 ### 3.8 Uploads and per-route limits
-Implement `File` fields, multipart parsing streamed to disk, type checks on content, and limits computed from declarations. Add per-route pagination limits on the same model. Read `budgets.toml` (embedded in the binary) for per-route `body_size`; its test checks stay in 9.3.
+Implement `File` fields, multipart parsing streamed to disk, type checks on content, and limits computed from declarations. Add per-route pagination limits on the same model. Read `budgets.toml`, embedded by `balise::run!()` like `balise.toml`, for per-route `body_size`; its test checks stay in 9.3.
 - More: [application.md](application.md#files), [engine.md](engine.md#per-route-limits)
 - To handle: authentication and cheap extractors run before the body is read ([engine.md](engine.md#open-questions))
 
@@ -99,6 +98,7 @@ Wrap `cargo check`, enrich diagnostics, apply the project lints, check schema dr
 Implement the debugging commands, answered by the project's dev build so versions always match. Each one is also an MCP tool later.
 - More: [application.md](application.md#debugging), [engine.md](engine.md#diagnostics)
 - Also: `balise logs`, `balise test`, `balise approve`, `balise approvals`, `balise policy set`
+- `balise config check` runs the app's `config check` command; `balise explain config` lists every setting with its default and variable
 
 ### 4.5 Agent hooks and generated `AGENTS.md`
 Generate hooks for Claude Code and rules for Cursor, and an `AGENTS.md` describing conventions, commands and the working loop. Keep it short enough to stay in context.
@@ -137,6 +137,7 @@ Implement `#[derive(Model)]`, typed prefixed UUIDv7 ids, timestamps, and the sch
 - To decide: database drivers, the first that works ([alternatives.md](alternatives.md))
 - To handle: prefix collisions and parsing errors for prefixed ids ([data.md](data.md#open-questions))
 - The owner field is checked by the compiler; `NewOrder`, `Insert<Order>` and `with_<field>` are generated with the model ([data.md](data.md#naming))
+- The `orm` module declares its settings (`database`, the database URL as a secret), with a registry the core reads
 - Bridge `log` or `tracing`, whichever the driver uses, into Balise's events, and redact causes: a driver error can quote a row's values ([errors-and-logs.md](errors-and-logs.md#open-questions))
 - Ids, enums and dates become `Input` / `Output` field types; `#[input(model = …)]`, which only checks that the model exists so far, applies the model's rules
 

@@ -1,0 +1,5 @@
+# Balise configuration. Secrets never go here: they come from environment variables.
+# Every setting and its default: `balise explain config`.
+
+[env.dev]
+log.level = "debug"

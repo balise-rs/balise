@@ -75,7 +75,8 @@ pub struct RequestLine {
     /// The full path, API base included, without the query string.
     pub path: String,
     pub status: u16,
-    pub duration_ms: u64,
+    /// Microseconds: most requests take less than a millisecond.
+    pub duration_us: u64,
     /// Database queries, when the `orm` module counts them.
     pub queries: Option<u32>,
 }
@@ -291,7 +292,10 @@ impl Event {
                 if let Some(handler) = &self.handler {
                     field(&mut out, "handler", &text(handler));
                 }
-                field(&mut out, "duration_ms", &number(line.duration_ms));
+                let duration = milliseconds(line.duration_us);
+                field(&mut out, "duration_ms", &move |out: &mut String| {
+                    out.push_str(&duration)
+                });
                 if let Some(queries) = line.queries {
                     field(&mut out, "queries", &number(u64::from(queries)));
                 }
@@ -347,7 +351,7 @@ fn request_sentence(line: &RequestLine, event: &Event) -> String {
         Some(handler) => format!("{handler} returned {}", line.status),
         None => format!("no handler, {}", line.status),
     };
-    let _ = write!(outcome, " in {} ms", line.duration_ms);
+    let _ = write!(outcome, " in {}", readable_duration(line.duration_us));
     if let Some(queries) = line.queries {
         let noun = if queries == 1 { "query" } else { "queries" };
         let _ = write!(outcome, " with {queries} {noun}");
@@ -356,6 +360,27 @@ fn request_sentence(line: &RequestLine, event: &Event) -> String {
         "{} {} → request {request_id} ({outcome})",
         line.method, line.path
     )
+}
+
+/// Milliseconds for JSON, to the microsecond: `4`, `0.312`, `12.5`.
+fn milliseconds(us: u64) -> String {
+    let text = format!("{}.{:03}", us / 1000, us % 1000);
+    text.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// A duration for a person: `312 µs` below a millisecond, `4.6 ms` below ten, `52 ms` above.
+fn readable_duration(us: u64) -> String {
+    match us {
+        0..1_000 => format!("{us} µs"),
+        1_000..10_000 => {
+            let tenths = (us + 50) / 100;
+            match tenths % 10 {
+                0 => format!("{} ms", tenths / 10),
+                rest => format!("{}.{rest} ms", tenths / 10),
+            }
+        }
+        _ => format!("{} ms", (us + 500) / 1000),
+    }
 }
 
 /// A field's value in the terminal: text without quotes, an object's values side by side.
@@ -436,6 +461,17 @@ mod tests {
         assert_eq!(rfc3339(0), "1970-01-01T00:00:00.000Z");
         assert_eq!(rfc3339(951_782_400_000), "2000-02-29T00:00:00.000Z");
         assert_eq!(time_of_day(1_791_720_131_478), "12:02:11");
+    }
+
+    #[test]
+    fn durations_keep_sub_millisecond_precision() {
+        assert_eq!(readable_duration(312), "312 µs");
+        assert_eq!(readable_duration(4_000), "4 ms");
+        assert_eq!(readable_duration(4_640), "4.6 ms");
+        assert_eq!(readable_duration(5_004_200), "5004 ms");
+        assert_eq!(milliseconds(4_000), "4");
+        assert_eq!(milliseconds(312), "0.312");
+        assert_eq!(milliseconds(12_500), "12.5");
     }
 
     #[test]
