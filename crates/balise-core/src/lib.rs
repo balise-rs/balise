@@ -8,6 +8,7 @@ pub mod extract;
 pub mod handler;
 pub mod input;
 pub mod json;
+pub mod log;
 pub mod output;
 pub mod registry;
 pub mod response;

@@ -65,6 +65,47 @@ fn from_serde(value: serde_json::Value) -> Value {
     }
 }
 
+/// Appends `value` to `out` as JSON.
+pub fn write_value(out: &mut String, value: &Value) {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Number(Number::Integer(n)) => {
+            let _ = write!(out, "{n}");
+        }
+        Value::Number(Number::Unsigned(n)) => {
+            let _ = write!(out, "{n}");
+        }
+        Value::Number(Number::Float(n)) if n.is_finite() => {
+            let _ = write!(out, "{n}");
+        }
+        Value::Number(Number::Float(_)) => out.push_str("null"),
+        Value::String(text) => write_string(out, text),
+        Value::Array(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_value(out, item);
+            }
+            out.push(']');
+        }
+        Value::Object(entries) => {
+            out.push('{');
+            for (i, (name, item)) in entries.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_string(out, name);
+                out.push(':');
+                write_value(out, item);
+            }
+            out.push('}');
+        }
+    }
+}
+
 /// Appends `text` to `out` as a JSON string, quotes included.
 pub fn write_string(out: &mut String, text: &str) {
     out.push('"');

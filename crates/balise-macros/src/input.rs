@@ -13,7 +13,7 @@ use syn::{Data, DeriveInput, Expr, Fields, Ident, Lit, LitInt, LitStr};
 
 use crate::error;
 
-const FIELD_ATTRIBUTES: &str = "`min`, `max`, `length(min = …, max = …)`, `email`, `url`, `one_of(\"a\", \"b\")`, `default = …`";
+const FIELD_ATTRIBUTES: &str = "`min`, `max`, `length(min = …, max = …)`, `email`, `url`, `one_of(\"a\", \"b\")`, `default = …`, `secret`";
 const STRUCT_ATTRIBUTES: &str = "`model = …`, `allow_unknown_fields`";
 
 pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -70,7 +70,11 @@ pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
                 }
             }
         });
+        let secret = rules
+            .secret
+            .then(|| quote!(__balise_fields.secret(#json_name);));
         reads.push(quote! {
+            #secret
             let #local = #read;
             #checks
         });
@@ -165,6 +169,7 @@ struct FieldRules {
     url: Option<Ident>,
     one_of: Option<(Ident, Vec<LitStr>)>,
     default: Option<Expr>,
+    secret: bool,
 }
 
 impl FieldRules {
@@ -249,6 +254,7 @@ impl FieldRules {
                             return Err(twice());
                         }
                     }
+                    "secret" => rules.secret = true,
                     "default" => {
                         let value: Expr = meta.value()?.parse()?;
                         if rules.default.replace(value).is_some() {

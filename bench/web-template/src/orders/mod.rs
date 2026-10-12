@@ -38,6 +38,11 @@ async fn create(input: Body<CreateOrder>) -> Result<Created<OrderView>> {
         contact: input.contact,
         ..Order::sample(1)
     };
+    balise::log::info!(
+        order_id = order.id,
+        quantity = order.quantity,
+        "Order created"
+    );
     Ok(Created(order.into()))
 }
 

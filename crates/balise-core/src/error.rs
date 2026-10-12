@@ -11,7 +11,7 @@ use crate::error_codes::{EXT0001, ErrorCode, HTTP0500};
 use crate::event::{Event, Level};
 use crate::extract::FieldError;
 use crate::handler::{Request, Response};
-use crate::json;
+use crate::json::{self, Value};
 
 /// What a handler returns when it can fail: `Result<OrderView>`.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -31,6 +31,7 @@ struct Details {
     fields: Vec<FieldError>,
     /// Where it was raised in application code: file and line.
     location: Option<(&'static str, u32)>,
+    detail: Option<String>,
     cause: Option<String>,
 }
 
@@ -59,6 +60,7 @@ impl Error {
             fix: code.format_fix(args),
             fields: Vec::new(),
             location: None,
+            detail: None,
             cause: None,
         }))
     }
@@ -74,6 +76,7 @@ impl Error {
             fix,
             fields: Vec::new(),
             location: Some(caller()),
+            detail: None,
             cause: None,
         }))
     }
@@ -97,12 +100,25 @@ impl Error {
         self
     }
 
-    /// The response to a request, a `5xx` being reported in the logs first.
-    pub fn respond(&self, request: &Request) -> Response {
-        if self.0.status >= 500 {
-            self.event(&request.request_id).emit();
-        }
-        self.render(&request.request_id, request.error_details)
+    /// The response to a request. The error travels with it, outside the body, so that the
+    /// engine logs it with the request's summary.
+    pub fn respond(self, request: &Request) -> Response {
+        self.into_response(&request.request_id, request.error_details)
+    }
+
+    /// Like [`respond`](Self::respond), outside a handler: for the router's own errors.
+    pub fn into_response(self, request_id: &str, details: bool) -> Response {
+        let mut response = self.render(request_id, details);
+        response.error = Some(self);
+        response
+    }
+
+    /// What the logs may say beyond the response: `No Order with id … for usr_…: it belongs
+    /// to another user`. The response keeps the message.
+    #[doc(hidden)]
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Error {
+        self.0.detail = Some(detail.into());
+        self
     }
 
     /// The response: `{"error": {"code", "message", "fields"?, "location"?, "fix"?, "cause"?,
@@ -151,22 +167,50 @@ impl Error {
         Response::json(if hidden { 500 } else { self.0.status }, body)
     }
 
-    /// The event logged for a `5xx`. The full request context arrives with the logs.
-    fn event(&self, request_id: &str) -> Event {
-        let mut message = self.0.message.clone();
-        if let Some(location) = self.0.location {
-            message = format!("{message} (at {}:{})", location.0, location.1);
+    /// The event logged for a `5xx`, before the request's summary.
+    pub fn event(&self) -> Event {
+        Event {
+            location: self.location_text(),
+            fix: Some(self.0.fix.clone()),
+            cause: self.0.cause.clone(),
+            detail: self.0.detail.clone(),
+            ..Event::new(Level::Error, &self.0.message).with_code(self.0.code)
         }
-        let event = Event {
-            level: Level::Error,
-            code: Some(self.0.code),
-            message: format!("{message} [{request_id}]"),
-            cause: None,
-        };
-        match &self.0.cause {
-            Some(cause) => event.with_cause(cause),
-            None => event,
+    }
+
+    /// Adds the error to its request's summary: its code always; for a `4xx`, which has no
+    /// event of its own, also what happened, where, and the fix.
+    pub fn summarize(&self, summary: &mut Event) {
+        summary.code = Some(self.0.code);
+        if self.0.status < 500 {
+            summary.detail = Some(self.0.detail.clone().unwrap_or(self.0.message.clone()));
+            summary.location = self.location_text();
+            summary.fix = Some(self.0.fix.clone());
+            if !self.0.fields.is_empty() {
+                let fields = self
+                    .0
+                    .fields
+                    .iter()
+                    .map(|field| {
+                        let entry = Value::Object(vec![
+                            (
+                                "code".to_string(),
+                                Value::String(field.code.code().to_string()),
+                            ),
+                            ("message".to_string(), Value::String(field.message.clone())),
+                        ]);
+                        (field.field.clone(), entry)
+                    })
+                    .collect();
+                summary
+                    .fields
+                    .push(("fields".to_string(), Value::Object(fields)));
+            }
         }
+    }
+
+    fn location_text(&self) -> Option<String> {
+        self.0.location.map(|(file, line)| format!("{file}:{line}"))
     }
 }
 

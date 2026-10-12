@@ -3,7 +3,8 @@
 //! Every default lives here and nowhere else: no other file may hard-code an address or the
 //! API prefix (a test checks it).
 
-use crate::event::Event;
+use crate::event::{Event, Level};
+use crate::log::Format;
 
 /// The application's configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,6 +18,10 @@ pub struct Config {
     /// Whether error responses show location, fix and cause, and keep a `5xx` as it is. On in
     /// dev only: they can reveal infrastructure details.
     pub error_details: bool,
+    /// How logs are written: text for a terminal, JSON lines for a collector.
+    pub log_format: Format,
+    /// Events below this level are not written.
+    pub log_level: Level,
 }
 
 /// Where the API is served.
@@ -38,6 +43,8 @@ impl Default for Config {
             },
             body_size: 2 * 1024 * 1024,
             error_details: false,
+            log_format: Format::Text,
+            log_level: Level::Info,
         }
     }
 }
@@ -45,6 +52,7 @@ impl Default for Config {
 impl Config {
     /// Loads the configuration. For now, the defaults; `balise.toml` and the environment come
     /// later, behind the same function.
+    #[allow(clippy::result_large_err)] // startup only: the size costs nothing
     pub fn load() -> Result<Config, Event> {
         Ok(Config::default())
     }

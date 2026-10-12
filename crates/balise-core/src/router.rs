@@ -44,6 +44,7 @@ pub enum Match {
 
 impl Router {
     /// Builds the router, or the event naming two handlers that claim the same route.
+    #[allow(clippy::result_large_err)] // startup only: the size costs nothing
     pub fn build(routes: &'static [Route], base: &str) -> Result<Router, Event> {
         let mut root = Node::default();
         for route in routes {

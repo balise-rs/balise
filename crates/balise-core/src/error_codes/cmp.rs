@@ -85,7 +85,7 @@ are the ones listed in the documentation, and nothing else:
 
 - on an `Input`: `#[input(model = Order)]` and `#[input(allow_unknown_fields)]`;
 - on an `Input` field: `min`, `max`, `length(min = …, max = …)`, `email`, `url`,
-  `one_of("a", "b")` and `default = …`;
+  `one_of("a", "b")`, `default = …` and `secret`;
 - on an `Output`: `#[output(from = Order)]`.
 
 The message names what is wrong and the fix gives the right form.
@@ -132,6 +132,16 @@ named fields. Each variant has one `#[error(…)]` attribute with:
 - `fix`: what to do about it, in the same form.
 
 The doc comment of a variant becomes its explanation in `balise explain`.
+"#,
+    }
+    CMP0012 {
+        title: "Log field value not supported",
+        message: "`{type}` cannot be the value of a log field",
+        fix: "Log text, numbers or booleans: `order_id = id`, or `status = status.to_string()`.",
+        explanation: r#"
+A field of `balise::log::info!(name = value, "…")` becomes a JSON field in production logs,
+so its value is text, a number, a boolean, or an `Option` of one of them. Other types are
+converted first, usually with `.to_string()`.
 "#,
     }
 }

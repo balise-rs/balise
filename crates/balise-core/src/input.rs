@@ -18,6 +18,8 @@ pub trait Input: Sized {
 pub struct Fields {
     entries: Vec<(String, Raw)>,
     errors: FieldErrors,
+    /// Fields marked `#[input(secret)]`: their values are never repeated in messages.
+    secrets: Vec<&'static str>,
 }
 
 /// One value received: JSON, or text from a query string.
@@ -37,6 +39,7 @@ impl Fields {
                     .map(|(name, value)| (name, Raw::Json(value)))
                     .collect(),
                 errors: Vec::new(),
+                secrets: Vec::new(),
             }),
             other => Err(other.kind()),
         }
@@ -53,6 +56,7 @@ impl Fields {
         Fields {
             entries,
             errors: Vec::new(),
+            secrets: Vec::new(),
         }
     }
 
@@ -62,6 +66,7 @@ impl Fields {
         match T::read(raw) {
             Ok(value) => Some(value),
             Err(error) => {
+                let error = self.redact(name, error);
                 self.errors.push(error.into_field_error(name));
                 None
             }
@@ -75,10 +80,32 @@ impl Fields {
             raw => match T::read(raw) {
                 Ok(value) => Some(value),
                 Err(error) => {
+                    let error = self.redact(name, error);
                     self.errors.push(error.into_field_error(name));
                     None
                 }
             },
+        }
+    }
+
+    /// Marks a field `#[input(secret)]`: messages never repeat its value.
+    pub fn secret(&mut self, name: &'static str) {
+        self.secrets.push(name);
+    }
+
+    /// A secret field's value is never repeated: `#[input(secret)]`, or a name that
+    /// contains `password`, `token` or `secret`.
+    fn redact(&self, name: &str, problem: Problem) -> Problem {
+        match problem {
+            Problem::WrongType { expected, .. }
+                if self.secrets.contains(&name) || crate::log::is_secret(name) =>
+            {
+                Problem::WrongType {
+                    expected,
+                    found: crate::log::REDACTED.to_string(),
+                }
+            }
+            other => other,
         }
     }
 
@@ -595,6 +622,30 @@ mod tests {
                 "must be a whole number, 0 or more, not a string",
                 "must be a whole number from 0 to 255, not `300`",
                 "must be a list where each item is a whole number, 0 or more, not a list where item 2 is a string",
+            ]
+        );
+    }
+
+    #[test]
+    fn secret_values_are_never_repeated() {
+        let pairs = vec![
+            ("reset_token".to_string(), "abc".to_string()),
+            ("pin".to_string(), "x1".to_string()),
+        ];
+        let mut fields = Fields::from_query(pairs);
+        fields.secret("pin");
+        fields.read::<u32>("reset_token");
+        fields.read::<u32>("pin");
+        let messages: Vec<String> = fields
+            .finish(&[], false)
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "must be a whole number, 0 or more, not ***",
+                "must be a whole number, 0 or more, not ***"
             ]
         );
     }

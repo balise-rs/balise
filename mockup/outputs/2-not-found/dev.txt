@@ -1,4 +1,4 @@
-14:03:40  GET /api/orders/ord_01JB8XQ5 → request req_9b21e0 (orders::get returned 404 in 3 ms with 1 query)
+12:03:40  GET /api/orders/ord_01JB8XQ5 → request req_9b21e0 (orders::get returned 404 in 3 ms with 1 query)
           DB0042  No Order with id ord_01JB8XQ5 for usr_01JB7K2M: it belongs to another user
           at src/orders/mod.rs:26 in orders::get
           fix: Use an id from GET /api/orders. If a missing row is expected, use `Order::find`, which returns an Option.

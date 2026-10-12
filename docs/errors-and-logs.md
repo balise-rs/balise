@@ -77,7 +77,7 @@ Each request produces one summary event when it ends, at `info`: method, path, h
 - **`4xx`**: the client sent something wrong; the server did its job. No separate event: the summary carries the code, the detail and the location. A bot probing ids does not fill the logs with errors.
 - **Logs may say more than the response.** A `404` on another user's row says so in the logs; the response only says the row was not found.
 
-Application code logs through `balise::log` (`info!`, `warn!`…), which produces the same events. `println!` is flagged by `balise check`.
+Application code logs through `balise::log` (`info!`, `warn!`…), which produces the same events, with the request's ID and handler. The engine keeps the current request per task, so the core needs no runtime. `println!` is flagged by `balise check`.
 
 ## Renderings
 
@@ -86,14 +86,14 @@ The format depends on the environment and can be overridden with `log.format` in
 Dev (terminal, colored):
 
 ```
-14:01:58  GET /api/orders → request req_51e07a (orders::list returned 200 in 4 ms with 1 query)
-14:02:11 ERROR DB0003  Cannot reach the database at db:5432
+12:01:58  GET /api/orders → request req_51e07a (orders::list returned 200 in 4 ms with 1 query)
+12:02:11 ERROR DB0003  Cannot reach the database at db:5432
          at src/orders/mod.rs:31 in orders::create, request req_7f3a2c
          cause: connection refused (os error 111), 3 attempts in 5 s
          fix: Check that the database is running (`balise dev` starts it) and that DATABASE_URL points to it.
          more: balise explain DB0003
-14:02:11  POST /api/orders → request req_7f3a2c (orders::create returned 500 in 5004 ms with 0 queries)
-14:03:40  GET /api/orders/ord_01JB8XQ5 → request req_9b21e0 (orders::get returned 404 in 3 ms with 1 query)
+12:02:11  POST /api/orders → request req_7f3a2c (orders::create returned 500 in 5004 ms with 0 queries)
+12:03:40  GET /api/orders/ord_01JB8XQ5 → request req_9b21e0 (orders::get returned 404 in 3 ms with 1 query)
           DB0042  No Order with id ord_01JB8XQ5 for usr_01JB7K2M: it belongs to another user
           at src/orders/mod.rs:26 in orders::get
           fix: Use an id from GET /api/orders. If a missing row is expected, use `Order::find`, which returns an Option.
@@ -103,6 +103,12 @@ Dev (terminal, colored):
 - A request line reads as a sentence: path, request ID, then what the handler returned, how fast, with how many queries.
 - The request ID of an event is on its `at` line, so it can be matched to its request when requests interleave.
 - Every `fix:` line is followed by `more: balise explain CODE`. JSON lines carry the `code` field instead.
+- Times are UTC in both renderings, so a dev line and a production line can be compared directly.
+- The query count appears only when the `orm` module counts queries; without it, the line ends with the duration.
+- A request that no handler answers (`404`, `405`) reads `(no handler, 404 in 1 ms)`, with the code and fix below.
+- A `4xx` with field errors lists them under the request line, one per line (`contact: VAL0006 must be an email address`), and in a `fields` object in JSON, the same as in the response.
+- The path is logged without its query string, which can carry secrets (`?token=…`). Headers are never logged.
+- Logs go to stdout. The format and the minimum level come from the configuration; both renderers are pure functions of the event, and the engine is the only place that logs a request.
 
 Colors carry the level (red for errors and `5xx`, yellow for warnings and `4xx`, dim for `2xx`). With `NO_COLOR`, or when the output is not a terminal, the text is the same without them.
 
@@ -125,7 +131,8 @@ Test and prod (one JSON object per line, on stdout):
 ## Sensitive data
 
 - Headers `Authorization`, `Cookie` and `Set-Cookie` are never logged.
-- `Input` fields marked `#[input(secret)]`, and any field named `password`, `token` or `secret`, are replaced by `***` in logs and error messages.
+- `Input` fields marked `#[input(secret)]`, and any field whose name contains `password`, `token` or `secret`, are replaced by `***` in logs and error messages. The same rule applies to the fields of `balise::log`.
+- Query strings are never logged.
 - Database URLs are logged without their password.
 
 ## Compile-time errors
@@ -219,4 +226,3 @@ A panic in a handler becomes a `500` with an error event. Crashes that cannot be
 From the review of the mock-up by agents (2026-10-11):
 
 - **`cause` kept in full can leak personal data**: a driver error quotes the row's values (a unique violation repeats the email). The redaction rules must apply to causes too.
-- **Secrets in request logs**: the password reset token travels in a URL (`?token=…`) and lands in request lines. Query parameters named `token`, `code` or `secret` must be redacted like body fields.

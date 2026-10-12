@@ -18,9 +18,10 @@ use balise_core::error_codes::{
     EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007, HTTP0008,
     HTTP0009, HTTP0012,
 };
-use balise_core::event::{Event, Level};
+use balise_core::event::{Event, Level, RequestLine};
 use balise_core::handler::{self, Method};
-use balise_core::registry;
+use balise_core::log::{self, Logger, RequestContext};
+use balise_core::registry::{self, Route};
 use balise_core::router::{Match, Router};
 use balise_core::text::format_size;
 use bytes::Bytes;
@@ -41,6 +42,7 @@ const REPORT_PERIOD: Duration = Duration::from_secs(1);
 /// Builds the router from the registered routes, starts the runtime and serves. Never
 /// returns: on a fatal error, reports it and exits with a non-zero code.
 pub fn run(config: Config) -> ! {
+    log::install(Logger::stdout(config.log_format, config.log_level));
     if let Err(event) = error_codes::check_app_codes() {
         fail(event);
     }
@@ -67,6 +69,7 @@ pub fn run(config: Config) -> ! {
 }
 
 /// Opens the listening socket, or the event explaining why it could not.
+#[allow(clippy::result_large_err)] // startup only: the size costs nothing
 pub async fn bind(address: &str) -> Result<TcpListener, Event> {
     TcpListener::bind(address)
         .await
@@ -182,6 +185,7 @@ impl Server {
 }
 
 pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
+    log::set_context(current_request);
     let mut throttle = Throttle {
         last_report: None,
         unreported: 0,
@@ -206,19 +210,34 @@ pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
             let service = service_fn(move |request| {
                 let server = server.clone();
                 async move {
+                    let started = Instant::now();
                     let request_id = request_id();
-                    let id = request_id.clone();
-                    Ok::<_, Infallible>(to_hyper(
-                        match tokio::spawn(handle(server, request, request_id)).await {
-                            Ok(response) => response,
-                            // Panics become proper crash reports later; for now, a plain 500.
-                            Err(panic) => {
-                                Error::coded(500, EXT0001, &[("cause", "the handler panicked")])
-                                    .with_cause(format!("{panic:?}"))
-                                    .render(&id, false)
-                            }
-                        },
-                    ))
+                    let method = request.method().to_string();
+                    let path = request.uri().path().to_string();
+                    let details = server.error_details;
+                    let task = tokio::spawn(handle(server, request, request_id.clone()));
+                    let (mut response, route) = match task.await {
+                        Ok(handled) => handled,
+                        // Panics become proper crash reports later; for now, a plain 500.
+                        Err(error) => {
+                            let cause = match error.try_into_panic() {
+                                Ok(panic) => panic_message(&*panic),
+                                Err(error) => error.to_string(),
+                            };
+                            let error =
+                                Error::coded(500, EXT0001, &[("cause", &cause)]).with_cause(cause);
+                            (error.into_response(&request_id, details), None)
+                        }
+                    };
+                    let line = RequestLine {
+                        method,
+                        path,
+                        status: response.status,
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        queries: None,
+                    };
+                    log_request(line, &request_id, route, &mut response);
+                    Ok::<_, Infallible>(to_hyper(response))
                 }
             });
             if let Err(error) = http1::Builder::new()
@@ -231,13 +250,62 @@ pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
     }
 }
 
+/// Logs a request: its error first when it is a `5xx`, then its summary.
+fn log_request(
+    line: RequestLine,
+    request_id: &str,
+    route: Option<&'static Route>,
+    response: &mut handler::Response,
+) {
+    let handler = route.map(Route::handler_name);
+    let error = response.error.take();
+    if let Some(error) = &error
+        && error.status() >= 500
+    {
+        let mut event = error.event();
+        event.handler = handler.clone();
+        event.request_id = Some(request_id.to_string());
+        event.emit();
+    }
+    let mut summary = Event::request(line, request_id);
+    summary.handler = handler;
+    if let Some(error) = &error {
+        error.summarize(&mut summary);
+    }
+    summary.emit();
+}
+
+/// The text a panic was raised with.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    match (panic.downcast_ref::<&str>(), panic.downcast_ref::<String>()) {
+        (Some(text), _) => format!("the handler panicked: {text}"),
+        (_, Some(text)) => format!("the handler panicked: {text}"),
+        _ => "the handler panicked".to_string(),
+    }
+}
+
+tokio::task_local! {
+    /// The request the current task runs, for application logs.
+    static REQUEST: (String, &'static Route);
+}
+
+fn current_request() -> Option<RequestContext> {
+    REQUEST
+        .try_with(|(request_id, route)| RequestContext {
+            request_id: request_id.clone(),
+            handler: route.handler_name(),
+        })
+        .ok()
+}
+
+/// Routes and runs a request; the route is returned for the logs.
 async fn handle(
     server: Arc<Server>,
     request: Request<Incoming>,
     request_id: String,
-) -> handler::Response {
+) -> (handler::Response, Option<&'static Route>) {
     let details = server.error_details;
-    let fail = |error: Error| error.render(&request_id, details);
+    let fail = |error: Error| (error.into_response(&request_id, details), None);
     let (parts, body) = request.into_parts();
     let method = Method::parse(parts.method.as_str());
     let path = parts.uri.path();
@@ -251,16 +319,14 @@ async fn handle(
                 Ok(collected) => collected.to_bytes().to_vec(),
                 Err(error) if error.is::<LengthLimitError>() => {
                     let limit = format_size(server.body_size);
-                    return fail(Error::coded(413, HTTP0012, &[("limit", &limit)]));
+                    let error = Error::coded(413, HTTP0012, &[("limit", &limit)]);
+                    return (error.into_response(&request_id, details), Some(route));
                 }
                 // The client closed the connection or sent a malformed body: it will most
                 // likely never read this answer.
                 Err(error) => {
-                    return fail(Error::coded(
-                        400,
-                        HTTP0002,
-                        &[("cause", &error.to_string())],
-                    ));
+                    let error = Error::coded(400, HTTP0002, &[("cause", &error.to_string())]);
+                    return (error.into_response(&request_id, details), Some(route));
                 }
             };
             let headers = parts
@@ -277,15 +343,18 @@ async fn handle(
                 query: parts.uri.query().unwrap_or_default().to_string(),
                 headers,
                 body,
-                request_id,
+                request_id: request_id.clone(),
                 error_details: details,
             };
-            (route.invoke)(request).await
+            let response = REQUEST
+                .scope((request_id, route), (route.invoke)(request))
+                .await;
+            (response, Some(route))
         }
         Match::MethodNotAllowed { allowed } => {
             let allowed: Vec<&str> = allowed.iter().map(|m| m.as_str()).collect();
             let allowed = allowed.join(", ");
-            let mut response = fail(Error::coded(
+            let (mut response, route) = fail(Error::coded(
                 405,
                 HTTP0009,
                 &[
@@ -295,7 +364,7 @@ async fn handle(
                 ],
             ));
             response.headers.push(("allow", allowed));
-            response
+            (response, route)
         }
         Match::NotFound => fail(Error::coded(
             404,

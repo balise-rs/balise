@@ -38,11 +38,13 @@ impl Request {
 }
 
 /// A response, before it is written to the connection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Response {
     pub status: u16,
     pub headers: Vec<(&'static str, String)>,
     pub body: Vec<u8>,
+    /// The error this response answers, for the logs; never sent.
+    pub error: Option<Error>,
 }
 
 impl Response {
@@ -52,6 +54,7 @@ impl Response {
             status,
             headers: vec![("content-type", "application/json".to_string())],
             body: body.into_bytes(),
+            error: None,
         }
     }
 }

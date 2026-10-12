@@ -55,9 +55,7 @@ Done !
 Done !
 
 ### 3.5 Logs and events
-Implement the event model, the dev and JSON renderings, the per-request summary and the redaction of sensitive data. Bridge `log` and capture dependency events. Every case of `mockup/outputs/` passes at the renderer level and end to end.
-- More: [errors-and-logs.md](errors-and-logs.md#events)
-- To handle: redaction of causes and of secret query parameters ([errors-and-logs.md](errors-and-logs.md#open-questions))
+Done !
 
 ### 3.6 Configuration and environments
 Load configuration from environment variables and `balise.toml` with the dev / prod rules, and the `dev` feature guard. Add `balise config check`.
@@ -139,6 +137,7 @@ Implement `#[derive(Model)]`, typed prefixed UUIDv7 ids, timestamps, and the sch
 - To decide: database drivers, the first that works ([alternatives.md](alternatives.md))
 - To handle: prefix collisions and parsing errors for prefixed ids ([data.md](data.md#open-questions))
 - The owner field is checked by the compiler; `NewOrder`, `Insert<Order>` and `with_<field>` are generated with the model ([data.md](data.md#naming))
+- Bridge `log` or `tracing`, whichever the driver uses, into Balise's events, and redact causes: a driver error can quote a row's values ([errors-and-logs.md](errors-and-logs.md#open-questions))
 - Ids, enums and dates become `Input` / `Output` field types; `#[input(model = …)]`, which only checks that the model exists so far, applies the model's rules
 
 ### 6.2 Migrations
@@ -238,6 +237,7 @@ Implement the extractor for handlers and channels, and `useCurrentUser` on the f
 ### 9.1 Dev instrumentation
 Fingerprint queries and detect N+1, duplicates, writes in loops, over-fetching and open transactions during network calls. Translate `EXPLAIN` plans into plain words.
 - More: [data.md](data.md#four-levels)
+- The N+1 case of `mockup/outputs/` (`PERF0001`, with the query budget in the request line) passes at the renderer level and end to end
 
 ### 9.2 Static analysis and declared sizes
 Report static candidates, promoted to warnings by `expected_rows` or by measurements.

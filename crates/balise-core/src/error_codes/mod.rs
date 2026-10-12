@@ -175,6 +175,7 @@ macro_rules! __register_app_code {
 
 /// Checked at startup: two `AppError` variants of different enums with the same code
 /// (`HTTP0013`). Within one enum, the derive rejects it at compile time.
+#[allow(clippy::result_large_err)] // startup only: the size costs nothing
 pub fn check_app_codes() -> Result<(), crate::event::Event> {
     let codes = app_codes();
     for (i, code) in codes.iter().enumerate() {

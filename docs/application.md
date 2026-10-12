@@ -128,6 +128,7 @@ Validation attributes:
 | `email`, `url` | strings |
 | `one_of("a", "b")` | strings |
 | `default = value` | any field |
+| `secret` | any field: its value is never repeated in messages or logs |
  
 If validation fails, Balise answers `422` (`VAL0001`) with a code and a message per field: missing (`VAL0004`), wrong type (`VAL0005`), rule not met (`VAL0006`) or unknown (`VAL0007`). The handler is not called.
 
@@ -279,6 +280,18 @@ async fn list(cache: State<PriceCache>) -> Result<Vec<PriceView>> { ... }
 - Work that must happen only if the request's writes are saved goes in `db.after_commit(async move { ... })`.
 - To change a row you read, lock it: `Order::get(db, id).owned_by(&user).for_update()`. Without the lock, `update` and `delete` do not compile ([data.md](data.md#locking-rows)).
 - Do not call `tokio::spawn` or `std::thread::spawn` directly.
+
+## Logging
+
+```rust
+balise::log::info!(order_id = id, "Order {id} cancelled");
+balise::log::warn!("Stock is low for {sku}");
+```
+
+- `info!`, `warn!`, `error!` and `debug!` write in Balise's format, with the request's ID and handler and the line that logged. Never use `println!`.
+- Fields come first, as `name = value`, then the message, written like `format!`. A field holds text, a number, a boolean or an `Option` of one; convert anything else with `.to_string()` (`CMP0012` otherwise).
+- A field whose name contains `password`, `token` or `secret` is written `***`.
+- Every request is already logged once when it ends, with its status, duration and error: do not log requests yourself.
 ## Tests
  
 ```rust

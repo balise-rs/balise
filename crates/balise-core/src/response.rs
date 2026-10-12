@@ -42,6 +42,7 @@ impl IntoResponse for NoContent {
             status: 204,
             headers: Vec::new(),
             body: Vec::new(),
+            error: None,
         }
     }
 }
@@ -52,6 +53,7 @@ impl IntoResponse for Redirect {
             status: 303,
             headers: vec![("location", self.location)],
             body: Vec::new(),
+            error: None,
         }
     }
 }
