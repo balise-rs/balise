@@ -43,7 +43,7 @@ This document gives the big picture. It does not go into individual decisions: e
  
 Two separate worlds:
  
-- **On the user's machine**, the `balise` CLI, a standalone binary. It creates projects, drives Docker, checks the code, and relays MCP to the dev server. → [agent-experience.md](agent-experience.md), [environments.md](environments.md)
+- **On the user's machine**, the `balise` launcher, installed once, which runs the CLI of each project's Balise version. The CLI creates projects, drives Docker, checks the code, and relays MCP to the dev server. → [agent-experience.md](agent-experience.md), [environments.md](environments.md)
 - **In the application**, a stack of crates exposed through a single facade. → [engine.md](engine.md)
 ## Crate architecture
  

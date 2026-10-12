@@ -14,20 +14,35 @@ Agents have never seen Balise in their training data: left alone, they will gues
 
 ## The CLI
 
-`balise` is a standalone binary installed on the host. It never requires Rust on the host: it drives Docker ([environments.md](environments.md)).
+`balise` is installed once on the host, before any project exists. It never requires Rust on the host: it drives Docker ([environments.md](environments.md)).
+
+### A launcher and a CLI per version
+
+Almost every command depends on the project's Balise version: `explain` reads its error registry, `check` its diagnostics, `generate` its templates. So `balise` is two programs:
+
+- **The launcher**, the `balise` command itself: small and stable. Inside a project, it reads the Balise version in `Cargo.lock` and runs the CLI of that version; outside a project (`balise new`), it uses the latest version, or `--version`. Each version is downloaded once into `~/.balise/versions/<version>/`, checksum verified. Upgrading Balise in a project changes the CLI it gets, and other projects keep theirs: no CLI has to support a range of versions.
+- **The versioned CLI**, published with each release of Balise. It holds every command and the MCP server. The project's dev image contains the same version, which `balise dev --inside` uses.
+
+What reads the project itself (routes, models, configuration) is answered by the project's dev build, as subcommands of the app's binary built with `dev`, like `./app config check` already: `./app routes`, `./app why GET /orders/5`. The CLI calls them, so one implementation serves every version. `trace` and `logs` ask the running dev server, which keeps recent requests in memory.
+
+**One implementation for the CLI and MCP.** Each command is a function that takes typed arguments and returns structured data; it prints nothing itself. Commands are declared in one registry, from which both the CLI's arguments and the MCP tools' schemas are derived. The terminal shows compact text, `--json` the data; an MCP tool answers with the same text as `content` and the same data as `structuredContent`. Every MCP tool is a command (`search_api` is `balise search`); commands that need a human (`policy`, `approve` in `human` mode) are not MCP tools.
+
+Errors of the CLI itself have codes in the `CLI` area, with their fix and explanation, like every other error. Exit codes: `0` success, `1` a problem found, `2` wrong usage.
 
 | Command | Purpose |
 | --- | --- |
-| `balise new <name>` | create a project, with `AGENTS.md`, agent hooks, `compose.yaml` |
+| `balise new <name>` | create a project ([below](#balise-new)) |
 | `balise dev` | start the dev environment, with reload; `--detach` runs it in the background, `balise dev status` and `balise dev stop` control it |
 | `balise check` | compile and enrich errors; `--ci` checks everything, the release configuration included |
 | `balise test` | start the test database, then run `cargo test` |
 | `balise logs` | recent events of the dev server, filtered by code, level and period |
 | `balise approve` | review and decide pending sensitive decisions ([Sensitive decisions](#sensitive-decisions)) |
 | `balise approvals` | list past decisions, filtered by author and date |
-| `balise policy set <type> human\|agent` | change who decides a type of sensitive decision; needs a terminal |
+| `balise policy preset <preset>` | choose who decides sensitive decisions, for all types at once; needs a terminal |
+| `balise policy set <type> human\|agent` | change who decides one type of sensitive decision; needs a terminal |
 | `balise audit` | run tests or a scenario and report performance problems |
 | `balise explain <CODE>` | explain an error code; `balise explain config` lists every setting and its default, `balise explain budgets` how default budgets are chosen |
+| `balise search <name>` | find a name in Balise's API, or what to write instead of a name from another framework |
 | `balise introspect` | print the project map as JSON |
 | `balise routes` | list routes and handlers |
 | `balise why <METHOD> <path>` | explain a `404` or `405` |
@@ -37,27 +52,62 @@ Agents have never seen Balise in their training data: left alone, they will gues
 | `balise config check --env <env>` | validate configuration without starting the app |
 | `balise mcp` | MCP server for agents (stdio) |
 
-### Optional modules at `balise new`
+### `balise new`
 
-`balise new` enables every optional module (`orm`, `auth`, and those to come), listed in the project's `Cargo.toml`. Each can be refused at creation with `--no-<module>` (`--no-orm`, `--no-auth`). `--no-example` creates the project without the example resource, for those who already know what they want. The example adapts: with `orm`, a resource stored in the database; without it, a route and a page, and storage is left to the agent.
+**Interactive or not.** In a terminal, `balise new` asks only the questions whose flag is missing: without flags, it asks everything. Out of a terminal (an agent's shell, CI), or when the environment shows an agent (`CLAUDECODE`, `CI`), or with `--no-input`, it asks nothing: a missing required flag is an error with a code, which gives the complete command to run again.
 
-`balise new` also asks for a policy preset for sensitive decisions: `autonomous` (the default), `strict` or `full-auto` ([Sensitive decisions](#sensitive-decisions)).
+The questions, in order:
+
+1. modules: all (`orm`, `auth`, `mail`, and those to come), none, or one by one;
+2. front end: React, or none;
+3. database: PostgreSQL or SQLite, when `orm` is chosen;
+4. the example resource: yes by default;
+5. the policy for sensitive decisions: `autonomous`, `strict` or `full-auto`, each explained in one line ([Sensitive decisions](#sensitive-decisions)).
+
+A summary is confirmed, then `balise new` prints the equivalent command with flags, to create the same project again.
+
+| Flag | Without a terminal |
+| --- | --- |
+| `--front <framework>` or `--no-front` | required, exactly one of the two; `react` today, Vue and Svelte later |
+| `--no-orm`, `--no-auth`, `--no-mail` | every module by default; `--minimal` refuses them all |
+| `--db postgres\|sqlite` | `postgres` by default; an error with `--no-orm` |
+| `--no-example` | the example resource by default |
+
+**The policy is never chosen by a flag.** It says what the agent may decide alone, so an agent must not choose it at creation. In a terminal, the question is asked; otherwise the policy is `strict`, and `balise new` ends by asking the agent to have the user choose, in their terminal: `balise policy preset autonomous`.
+
+**Defaults are announced.** Without a terminal, `balise new` lists the defaults it applied, each with how to change it: recreating the project costs nothing yet, and the example resource can be removed later with `balise remove resource`.
+
+```
+Created shop/ (Balise 0.4.2)
+
+Defaults applied:
+  modules   orm, auth, mail   change: recreate with --no-orm, --no-auth or --no-mail
+  database  postgres          change: recreate with --db sqlite
+  example   orders            remove it later: balise remove resource orders
+
+Recreate with other choices (nothing to lose yet):
+  rm -r shop && balise new shop --front react --no-mail
+
+Policy: strict (every sensitive decision waits for the user).
+Ask the user to choose how much you decide alone, in their terminal:
+  balise policy preset autonomous   (recommended)
+```
+
+**What it writes.** The project comes from a reference template kept in the repository, a real project compiled in CI, never from the mock-up. Most files are copied as they are (the example resource, front-end pages, configuration files); a few are assembled from the choices (`Cargo.toml`, the `mod` lines of `main.rs`, `compose.yaml`, the module sections of `AGENTS.md`, `.balise/policy.toml`). One `Cargo.lock` and one `pnpm-lock.yaml`, produced in CI with every module enabled, are copied whatever the choices: cargo and pnpm drop what a project does not use at its first build, and versions stay pinned. The lockfile also tells the launcher the project's version before its first build. CI runs `balise new` with the main combinations (all modules, `--minimal`, `--no-front`, SQLite) and checks that each project builds.
+
+The example resource adapts: with `orm`, a resource stored in the database; without it, a route and a page, and storage is left to the agent.
 
 ### Prerequisites at `balise new`
 
 `balise new` checks that git and Docker are installed, and that the Docker daemon is running.
 
-- **git present**: the project is initialized as a repository, with a generated `.gitignore`.
+- **git present**: the project is initialized as a repository, with a generated `.gitignore`. Nothing is committed: the first commit is the user's.
 - **Something missing**: `balise new` says so and keeps going. Neither is needed to create the project; Docker is needed later, for `balise dev`.
 - For each missing tool, Balise prints two ready-to-paste prompts, adapted to the detected operating system, and saves them in `.balise/prompts/`:
   - one asking the agent how to install the tool on this system;
   - one asking the agent for a short tutorial: what the tool is, why Balise uses it, and the few commands worth knowing.
 
 The user does not need to know what git or Docker are to get started: the agent becomes their guide.
-
-### Versions
-
-The CLI does not read the project's source to understand it. Project-specific commands (`introspect`, `routes`, `why`, MCP) ask the project's own dev build, so the answer always matches the Balise version the project uses. The CLI supports a range of library versions and says so when a project falls outside it.
 
 ## MCP
 
@@ -158,11 +208,11 @@ Some changes are decisions, not fixes: they trade a guarantee for something else
 | `breaking_migration` | `balise migrate --breaking` |
 | `dependency` | a new Cargo or npm dependency |
 
-**Who decides** is set per type in `.balise/policy.toml`: `human` or `agent`, `human` by default. The file changes only through `balise policy set <type> human|agent`, which needs a terminal; the agent is not allowed to write it, and the file is versioned, so any change of policy shows in the diff. `balise new` offers three presets:
+**Who decides** is set per type in `.balise/policy.toml`: `human` or `agent`, `human` by default. The file changes only through `balise policy preset <preset>` and `balise policy set <type> human|agent`, which need a terminal; the agent is not allowed to write it, and the file is versioned, so any change of policy shows in the diff. Three presets:
 
-- `autonomous` (the default): `agent` for technical decisions, `human` for `all_owners`, `raw_unscoped` and `breaking_migration`;
-- `strict`: `human` for everything;
-- `full-auto`: `agent` for everything; `balise new` says once what it means for security.
+- `autonomous` (recommended): `agent` for technical decisions, `human` for `all_owners`, `raw_unscoped` and `breaking_migration`;
+- `strict`: `human` for everything; the policy of a project created without a terminal, until the user chooses;
+- `full-auto`: `agent` for everything; choosing it says once what it means for security.
 
 **In `human` mode**, the hook does not block. Each pending decision is shown once to the agent, which tells the user. The user runs `balise approve`, which lists what is pending, with its context, one by one or all at once.
 

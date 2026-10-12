@@ -33,6 +33,7 @@ macro_rules! codes {
 }
 
 mod cfg;
+mod cli;
 mod cmp;
 mod ext;
 mod file;
@@ -42,6 +43,7 @@ mod run;
 mod val;
 
 pub use cfg::*;
+pub use cli::*;
 pub use cmp::*;
 pub use ext::*;
 pub use file::*;
@@ -53,6 +55,7 @@ pub use val::*;
 /// Every area, with its prefix and its codes.
 pub const AREAS: &[(&str, &[&ErrorCode])] = &[
     ("CFG", cfg::ALL),
+    ("CLI", cli::ALL),
     ("CMP", cmp::ALL),
     ("EXT", ext::ALL),
     ("FILE", file::ALL),
@@ -64,7 +67,8 @@ pub const AREAS: &[(&str, &[&ErrorCode])] = &[
 
 /// Prefixes that applications cannot use: Balise's areas, present and planned.
 pub const RESERVED_PREFIXES: &[&str] = &[
-    "AUTH", "CFG", "CMP", "DB", "DEV", "EXT", "FILE", "HTTP", "MAIL", "PERF", "RT", "RUN", "VAL",
+    "AUTH", "CFG", "CLI", "CMP", "DB", "DEV", "EXT", "FILE", "HTTP", "MAIL", "PERF", "RT", "RUN",
+    "VAL",
 ];
 
 /// A registered error code. Only the registry and `AppError` can create one.
@@ -138,6 +142,18 @@ impl ErrorCode {
             fix = fix.replace(&format!("{{{name}}}"), value);
         }
         fix
+    }
+
+    /// The error as a command prints it, without time or level:
+    /// `CLI0003: … \n  fix: … \n  more: balise explain CLI0003`.
+    pub fn report(&self, message_args: &[(&str, &str)], fix_args: &[(&str, &str)]) -> String {
+        format!(
+            "{}: {}\n  fix: {}\n  more: balise explain {}",
+            self.code,
+            self.format_message(message_args),
+            self.format_fix(fix_args),
+            self.code
+        )
     }
 
     /// The text printed by `balise explain`.

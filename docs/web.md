@@ -23,7 +23,7 @@ frontend/
  
 React first: it is the framework agents know best, so the one where they make the fewest mistakes. Vue and Svelte follow, with the same features.
  
-`balise new shop --front react` creates a project that works end to end:
+`balise new shop --front react` creates a project that works end to end (`--no-front` for an API alone; in a terminal, `balise new` asks):
  
 - Vite, React, TypeScript and a router, configured;
 - the generated client, already wired;

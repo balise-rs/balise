@@ -113,14 +113,5 @@ fn error(
     message_args: &[(&str, &str)],
     fix_args: &[(&str, &str)],
 ) -> syn::Error {
-    syn::Error::new(
-        span,
-        format!(
-            "{}: {}\n  fix: {}\n  more: balise explain {}",
-            code.code(),
-            code.format_message(message_args),
-            code.format_fix(fix_args),
-            code.code()
-        ),
-    )
+    syn::Error::new(span, code.report(message_args, fix_args))
 }

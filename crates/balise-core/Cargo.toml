@@ -5,7 +5,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+publish = true
 
 [features]
 # Reading uploads and storing files. The engine enables it; the macros, which only need the

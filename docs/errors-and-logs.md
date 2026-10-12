@@ -34,6 +34,7 @@ A code is an area prefix and four digits.
 | --- | --- |
 | `CMP` | compile-time errors raised by Balise macros and `balise check` |
 | `CFG` | configuration |
+| `CLI` | the `balise` command: arguments, versions, project creation |
 | `HTTP` | routing, connections, protocol |
 | `VAL` | input validation |
 | `FILE` | uploads |

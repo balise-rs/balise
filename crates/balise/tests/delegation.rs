@@ -42,9 +42,13 @@ fn the_facade_does_not_depend_on_delegated_crates() {
 
 #[test]
 fn the_facade_source_never_names_delegated_crates() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for entry in fs::read_dir(&src).unwrap() {
-        let path = entry.unwrap().path();
+    let mut files = Vec::new();
+    collect(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    assert!(files.len() >= 2, "lib.rs and the launcher");
+    for path in files {
         let text = fs::read_to_string(&path).unwrap();
         for word in text.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
             assert!(
@@ -52,6 +56,17 @@ fn the_facade_source_never_names_delegated_crates() {
                 "{} names `{word}`",
                 path.display()
             );
+        }
+    }
+}
+
+/// Every file under `dir`, the launcher in `src/bin/` included.
+fn collect(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        match path.is_dir() {
+            true => collect(&path, files),
+            false => files.push(path),
         }
     }
 }

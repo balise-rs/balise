@@ -35,6 +35,8 @@ Option A is the one implemented first.
 | 2026-10-10 | Handlers | Type erasure (`dyn`) after extraction | Fully monomorphized | Compile, runtime | to test |
 | 2026-10-10 | Route collection | Distributed slices (`linkme`), behind Balise's registry module | Registration at startup (`inventory`), or an in-house linker-section module | Compile, reliability across linkers | A implemented; to measure once the reference project compiles |
 | 2026-10-12 | Multipart parsing | In-house streaming parser | `multer` | Compile (its dependencies in every project), runtime on large uploads, robustness on malformed bodies | to test |
+| 2026-10-12 | CLI and versions | A launcher running the CLI of the project's version | One CLI supporting a range of Balise versions | Maintenance cost, agents' errors on version mismatches | to test |
+| 2026-10-12 | CLI arguments | Own parser, with codes and suggestions | `clap` | Quality of the help and errors for agents, maintenance | to test |
 
 ### Application API
 

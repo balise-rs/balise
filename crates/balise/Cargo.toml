@@ -5,27 +5,18 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+publish = true
 
 [features]
-orm = ["dep:balise-orm"]
-auth = ["dep:balise-auth"]
-mail = ["dep:balise-mail"]
-dev = ["dep:balise-dev", "balise-engine/dev"]
+# Optional modules (`orm`, `auth`, `mail`) arrive with their crates.
+dev = ["balise-engine/dev"]
 # Test builds: counters for budgets.
 test = []
-full = ["orm", "auth", "mail"]
 
 [dependencies]
 balise-core.workspace = true
 balise-macros.workspace = true
 balise-engine.workspace = true
-balise-realtime.workspace = true
-balise-ts.workspace = true
-balise-orm = { workspace = true, optional = true }
-balise-auth = { workspace = true, optional = true }
-balise-mail = { workspace = true, optional = true }
-balise-dev = { workspace = true, optional = true }
 
 [dev-dependencies]
 balise-core.workspace = true

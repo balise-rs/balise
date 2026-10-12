@@ -71,16 +71,14 @@ Done !
 
 ## 4. CLI
 
-### 4.1 `balise new`
-Generate a project from the templates (with `--no-<module>` and `--no-example`), check git and Docker, initialize the repository and print the help prompts when a tool is missing. The generated project must run as is.
-- More: [agent-experience.md](agent-experience.md#prerequisites-at-balise-new)
-- Also: the policy preset for sensitive decisions (`autonomous`, `strict`, `full-auto`), `[dev-dependencies]` with the `test` feature so `cargo test` works ([agent-experience.md](agent-experience.md#sensitive-decisions))
-- Also: `compose.yaml` derives `stop_grace_period` from `shutdown.timeout`, with a margin; the release profile keeps line tables (`debug = "line-tables-only"`) so production backtraces have lines ([engine.md](engine.md#shutdown))
+### 4.1 Launcher and `balise new`
+Done !
 
 ### 4.2 `balise dev`
 Start the app, the database and Vite in Docker, with rebuild on change, supervision and one log stream. Support `--native`.
 - More: [environments.md](environments.md#dev-with-docker)
 - Also: `--detach`, `balise dev status`, `balise dev stop`
+- Also: generate `compose.yaml` and the `Dockerfile` (the dev image holds the versioned CLI); `stop_grace_period` derived from `shutdown.timeout`, with a margin ([engine.md](engine.md#shutdown))
 
 ### 4.3 `balise check`
 Wrap `cargo check`, enrich diagnostics, apply the project lints, check schema drift and the generated client. Rank output: errors, new warnings, one summary line.
@@ -89,9 +87,9 @@ Wrap `cargo check`, enrich diagnostics, apply the project lints, check schema dr
 - Also: report a `compose.yaml` whose `stop_grace_period` is not longer than `shutdown.timeout`
 
 ### 4.4 `routes`, `why`, `trace`, `explain`
-Implement the debugging commands, answered by the project's dev build so versions always match. Each one is also an MCP tool later.
+Implement the debugging commands, answered by the project's dev build as subcommands of the app's binary (`./app routes`, `./app why …`) so versions always match. Each one is also an MCP tool later, from the same command registry.
 - More: [application.md](application.md#debugging), [engine.md](engine.md#diagnostics)
-- Also: `balise logs`, `balise test`, `balise approve`, `balise approvals`, `balise policy set`
+- Also: `balise logs`, `balise test`, `balise approve`, `balise approvals`, `balise policy set`, `balise search`
 - `balise config check` runs the app's `config check` command; `balise explain config` lists every setting with its default and variable
 
 ### 4.5 Agent hooks and generated `AGENTS.md`
@@ -108,7 +106,7 @@ Implement `balise mcp` as a stdio relay to the dev server, with `project_map`, `
 
 ### 5.2 Introspection
 Expose routes, inputs, outputs, models, schema and enabled modules as JSON, from the project's dev build. MCP and `balise introspect` share it.
-- More: [agent-experience.md](agent-experience.md#versions)
+- More: [agent-experience.md](agent-experience.md#a-launcher-and-a-cli-per-version)
 
 ### 5.3 `llms.txt` and error pages
 Generate the API reference and one page per error code at each release. Nothing is written by hand.
@@ -260,6 +258,7 @@ Build the binary with embedded assets and the multi-stage Dockerfile.
 - More: [environments.md](environments.md#production-build)
 - To decide: musl with mimalloc or glibc distroless ([alternatives.md](alternatives.md))
 - To handle: `/tmp`, CA certificates and a non-root user in the image ([environments.md](environments.md#open-questions))
+- Also: install the launcher without Rust: an install script (macOS, Linux, Windows), Homebrew, `cargo binstall`, from binaries published for each platform ([environments.md](environments.md#on-the-host))
 
 ### 10.2 Migrations under lock
 Apply migrations at startup under an advisory lock, or refuse to start when one is pending, depending on configuration.

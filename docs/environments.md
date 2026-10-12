@@ -56,7 +56,7 @@ Error details in responses are not a setting: they follow the environment (on in
 
 ## On the host
 
-The only thing to install is the `balise` CLI: a static binary, from a direct download, Homebrew, or `cargo binstall`. Rust is not needed on the host.
+The only thing to install is the `balise` launcher, once per machine; it fetches the CLI of each project's Balise version by itself ([agent-experience.md](agent-experience.md#a-launcher-and-a-cli-per-version)). For now it is installed with `cargo install balise`, which needs Rust. Later, an install script, Homebrew and `cargo binstall` will fetch a prebuilt static binary, and Rust will not be needed on the host.
 
 ## Dev with Docker
 

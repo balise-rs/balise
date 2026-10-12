@@ -1,0 +1,7 @@
+[package]
+name = "release"
+description = "Tags, pushes and publishes a version of Balise: `just publish <version>`"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true

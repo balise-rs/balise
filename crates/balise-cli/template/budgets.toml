@@ -1,0 +1,7 @@
+# Budgets of handlers that differ from the defaults, one section per handler:
+#
+#   ["imports::create"]
+#   body_size = "20MB"
+#   timeout = "2m"
+#
+# Lowering a value is free. Raising one is a sensitive decision.

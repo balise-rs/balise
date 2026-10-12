@@ -7,7 +7,7 @@ Big picture: [docs/architecture.md](docs/architecture.md).
 
 ```
 crates/
-  balise/           facade: the only dependency of user projects
+  balise/           facade: the only dependency of user projects; its `balise` binary is the launcher
   balise-core/      routing, extractors, errors, logs, config
   balise-macros/    procedural macros (routes, derives)
   balise-engine/    hyper / Tokio wrapper
@@ -17,9 +17,9 @@ crates/
   balise-auth/      auth (feature `auth`)
   balise-mail/      mail (feature `mail`)
   balise-dev/       MCP, instrumentation (feature `dev`, never in prod)
-  balise-cli/       the `balise` binary, installed on the host
+  balise-cli/       the versioned CLI: commands, MCP server, project templates
 bench/              compile-time benchmark
-tools/              repository tooling (release-age)
+tools/              repository tooling (release-age, release: `just publish <version>`)
 docs/               architecture.md and one document per component
 ```
 
