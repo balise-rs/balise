@@ -46,6 +46,9 @@ fn serve(files: Files, build: Environment, variables: &[(String, String)]) -> ! 
         Err(errors) => fail(&errors, environment),
     };
     log::install(Logger::stdout(config.log_format, config.log_level));
+    // Crash reports go to the storage, which survives a restart.
+    balise_core::file::set_storage(&config.storage_dir);
+    balise_core::panic::install(files.crate_name, files.root);
     for warning in loaded.warnings {
         warning.emit();
     }

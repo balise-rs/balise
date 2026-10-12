@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use balise_core::error_codes::{CMP0013, CMP0014};
+use balise_core::error_codes::{CMP0013, CMP0014, CMP0019};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
@@ -51,10 +51,16 @@ fn expand_in(root: &Path) -> syn::Result<TokenStream> {
     let budgets = budgets.display().to_string();
 
     let path = config.display().to_string();
+    let abort = error(Span::call_site(), CMP0019, &[], &[]).to_string();
     Ok(quote! {
+        // A panic is caught in its request or task; aborting would stop the whole server.
+        #[cfg(panic = "abort")]
+        ::core::compile_error!(#abort);
         ::balise::__private::start(::balise::__private::Files {
             config: ::core::include_str!(#path),
             budgets: ::core::include_str!(#budgets),
+            crate_name: ::core::env!("CARGO_CRATE_NAME"),
+            root: ::core::env!("CARGO_MANIFEST_DIR"),
         })
     })
 }
@@ -194,6 +200,8 @@ mod tests {
         );
         let tokens = expand_in(&root).unwrap().to_string();
         assert!(tokens.contains("include_str"), "{tokens}");
+        assert!(tokens.contains("panic = \"abort\""), "{tokens}");
+        assert!(tokens.contains("CMP0019"), "{tokens}");
     }
 
     #[test]

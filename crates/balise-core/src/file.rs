@@ -260,7 +260,7 @@ pub fn set_storage(dir: &str) {
     let _ = STORAGE.set(PathBuf::from(dir));
 }
 
-fn storage() -> &'static Path {
+pub(crate) fn storage() -> &'static Path {
     STORAGE.get_or_init(|| PathBuf::from(crate::config::Config::default().storage_dir))
 }
 

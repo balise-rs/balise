@@ -16,6 +16,7 @@ pub mod log;
 mod multipart;
 pub mod output;
 pub mod page;
+pub mod panic;
 pub mod registry;
 pub mod response;
 pub mod router;

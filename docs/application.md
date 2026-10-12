@@ -269,8 +269,8 @@ fn price_cache() -> PriceCache {
 async fn list(cache: State<PriceCache>) -> Result<Vec<PriceView>> { ... }
 ```
 
-- Declare state next to the resource that uses it, never in `main.rs`. The function takes no parameters; it may be `async` and return `Result<T>`, and an error stops the startup (`HTTP0016`).
-- Every `State<T>` a handler reads must have its function, and each type has one: both are checked at startup (`HTTP0014`, `HTTP0015`), never at the first request. Two values of the same type each get their own type: `struct BillingClient(Client)`.
+- Declare state next to the resource that uses it, never in `main.rs`. The function takes no parameters; it may be `async` and return `Result<T>`, and an error stops the startup (`RUN0005`).
+- Every `State<T>` a handler reads must have its function, and each type has one: both are checked at startup (`RUN0003`, `RUN0004`), never at the first request. Two values of the same type each get their own type: `struct BillingClient(Client)`.
 - State is read-only. For state that changes, create a `Shared<T>` and read it with `State<Shared<T>>`:
 
 ```rust
@@ -357,7 +357,7 @@ Investigate through Balise, never in the framework's dependencies. Everything be
 | Unsure which routes exist | `balise routes`, or the `project_map` MCP tool |
 | A request misbehaves | `balise trace <request_id>`: routing decision, extracted parameters, queries, error |
 | A network or connection error | its `HTTP` or `EXT` code, then `balise explain <CODE>` |
-| A panic | the Balise crash report: it shows your code first and folds framework frames |
+| A panic | its `RUN0006` event: the line that panicked and your frames, framework frames folded |
 
 ## Open questions
 

@@ -33,6 +33,8 @@ struct Details {
     location: Option<(&'static str, u32)>,
     detail: Option<String>,
     cause: Option<String>,
+    /// The application's frames, for a panic.
+    backtrace: Vec<String>,
 }
 
 impl Error {
@@ -62,6 +64,7 @@ impl Error {
             location: None,
             detail: None,
             cause: None,
+            backtrace: Vec::new(),
         }))
     }
 
@@ -78,6 +81,7 @@ impl Error {
             location: Some(caller()),
             detail: None,
             cause: None,
+            backtrace: Vec::new(),
         }))
     }
 
@@ -170,13 +174,32 @@ impl Error {
 
     /// The event logged for a `5xx`, before the request's summary.
     pub fn event(&self) -> Event {
-        Event {
+        let mut event = Event {
             location: self.location_text(),
             fix: Some(self.0.fix.clone()),
             cause: self.0.cause.clone(),
             detail: self.0.detail.clone(),
             ..Event::new(Level::Error, &self.0.message).with_code(self.0.code)
+        };
+        if !self.0.backtrace.is_empty() {
+            let backtrace = crate::panic::backtrace_value(&self.0.backtrace);
+            event.fields.push(("backtrace".into(), backtrace));
         }
+        event
+    }
+
+    /// A panic, as a `500` (`RUN0006`): `what` reads like `` `orders::get` ``. Its location
+    /// is where the panic was raised.
+    #[doc(hidden)]
+    pub fn panicked(what: &str, report: crate::panic::PanicReport) -> Error {
+        let mut error = Error::coded(
+            500,
+            crate::error_codes::RUN0006,
+            &[("what", what), ("message", &report.message)],
+        );
+        error.0.location = report.location;
+        error.0.backtrace = report.backtrace;
+        error
     }
 
     /// Adds the error to its request's summary: its code always; for a `4xx`, which has no

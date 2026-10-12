@@ -26,6 +26,10 @@ pub struct Files {
     pub config: &'static str,
     /// The text of `budgets.toml`.
     pub budgets: &'static str,
+    /// The application's crate, whose frames a backtrace shows: `shop`.
+    pub crate_name: &'static str,
+    /// The folder of its `Cargo.toml`, removed from the paths of backtraces.
+    pub root: &'static str,
 }
 
 /// Why the configuration is read.
@@ -544,6 +548,8 @@ mod tests {
         Files {
             config: text,
             budgets: "",
+            crate_name: "app",
+            root: "/app",
         }
     }
 

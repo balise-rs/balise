@@ -73,16 +73,6 @@ The app could not open the address it listens on, for a reason other than the co
 message.
 "#,
     }
-    HTTP0007 {
-        title: "Cannot start the server",
-        message: "Cannot start the server: {cause}",
-        fix: "The system refused to create the server's threads: check the memory and the process limits of this machine or container.",
-        explanation: r#"
-Before listening, Balise starts the threads that run requests. The system refused to create
-them, which happens when the machine or the container is out of memory, or when its limit of
-processes or threads is reached (`ulimit -u`, a container's `pids` limit).
-"#,
-    }
     HTTP0008 {
         title: "Too many open files",
         message: "Cannot accept connections: too many open files",
@@ -152,48 +142,6 @@ without loading the rest in memory. There are three usual causes:
 
 The default limit of a route without files is set in `balise.toml`; `balise explain config`
 shows its value, and `balise routes` shows each route's limit and where it comes from.
-"#,
-    }
-    HTTP0013 {
-        title: "Application error code declared twice",
-        message: "`{code}` is declared by two `AppError` variants: {first} and {second}",
-        fix: "Give one of the two variants another code: each code means one thing for the front end.",
-        explanation: r#"
-Application error codes are part of the contract with the front end, which may react to a
-code. Two variants with the same code would make it ambiguous, so the app does not start.
-Within one `AppError` enum, the derive already rejects it at compile time; this check
-covers codes declared in different enums.
-"#,
-    }
-    HTTP0014 {
-        title: "State not declared",
-        message: "No `#[balise::state]` creates `{type}`, which {reader} reads with `State<{type}>`",
-        fix: "Declare a function that creates it, next to the resource that uses it: `#[balise::state] fn …() -> {type} { … }`.",
-        explanation: r#"
-`State<T>` reads a value created once at startup by a function marked `#[balise::state]`.
-Balise checks at startup that every `State<T>` a handler reads has its function, so the app
-does not start with a handler that would always fail. A task that reads a state nobody
-declared gets this error when it runs.
-"#,
-    }
-    HTTP0015 {
-        title: "State declared twice",
-        message: "`{type}` is created by two `#[balise::state]` functions: {first} and {second}",
-        fix: "Keep one of the two functions: each type of state exists once. Wrap one of them in its own type if both are needed.",
-        explanation: r#"
-`State<T>` finds its value by type, so each type has one `#[balise::state]` function. Two
-values of the same type, such as two HTTP clients with different settings, each get their
-own type: `struct BillingClient(Client)`.
-"#,
-    }
-    HTTP0016 {
-        title: "State cannot be created",
-        message: "Cannot create the state `{type}`: {message}",
-        fix: "Fix what its `#[balise::state]` function reports: the cause and location say where it failed.",
-        explanation: r#"
-A `#[balise::state]` function returned an error at startup: a service it connects to is
-unreachable, a file it loads is missing… The app does not start without its state, rather
-than failing on every request that reads it.
 "#,
     }
     HTTP0017 {

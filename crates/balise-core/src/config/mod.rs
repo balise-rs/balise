@@ -28,6 +28,8 @@ pub struct Config {
     /// How long a request may take, for routes without files and without a `timeout` in
     /// `budgets.toml`.
     pub timeout: Duration,
+    /// How long a shutdown waits for requests and tasks in progress.
+    pub shutdown_timeout: Duration,
     /// Where `File::store` puts files, and uploads wait in `.uploads` meanwhile.
     pub storage_dir: String,
     pub pagination: PaginationConfig,
@@ -106,6 +108,7 @@ impl Config {
             },
             body_size: 2 * 1024 * 1024,
             timeout: Duration::from_secs(30),
+            shutdown_timeout: Duration::from_secs(10),
             storage_dir: "storage".to_string(),
             pagination: PaginationConfig {
                 per_page: 20,
@@ -238,6 +241,19 @@ pub const SETTINGS: &[Setting] = &[
         apply: |config, raw| match raw.text().and_then(crate::text::parse_duration) {
             Some(timeout) if !timeout.is_zero() => {
                 config.timeout = timeout;
+                true
+            }
+            _ => false,
+        },
+    },
+    Setting {
+        key: "shutdown.timeout",
+        kind: Kind::Safe,
+        expected: "a duration such as `10s` or `500ms`",
+        also: &[],
+        apply: |config, raw| match raw.text().and_then(crate::text::parse_duration) {
+            Some(timeout) => {
+                config.shutdown_timeout = timeout;
                 true
             }
             _ => false,

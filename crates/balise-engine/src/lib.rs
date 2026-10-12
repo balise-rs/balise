@@ -3,19 +3,23 @@
 //! hyper and Tokio are used here and nowhere else. Nothing from them crosses this crate's
 //! boundary into the facade: errors leave as Balise events with their codes.
 
+mod shutdown;
 mod start;
 mod tasks;
 
+pub use shutdown::signal;
 pub use start::start;
 pub use tasks::{Shared, SharedRead, SharedWrite, blocking, spawn};
 
 use std::convert::Infallible;
+use std::future::{Future, poll_fn};
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::pin::pin;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -24,15 +28,16 @@ use balise_core::config::Config;
 use balise_core::error::Error;
 use balise_core::error_codes;
 use balise_core::error_codes::{
-    EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007, HTTP0008,
-    HTTP0009, HTTP0017, HTTP0018,
+    EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0008, HTTP0009,
+    HTTP0017, HTTP0018, RUN0001,
 };
 use balise_core::event::{Event, Level, RequestLine};
 use balise_core::handler::{self, Method};
 use balise_core::limits::RouteLimits;
 use balise_core::log::{self, RequestContext};
+use balise_core::panic::Catch;
 use balise_core::registry::{self, Route};
-use balise_core::router::{Match, Router};
+use balise_core::router::{HEALTH_PATHS, Match, Router};
 use balise_core::state;
 use balise_core::text::format_duration;
 use bytes::Bytes;
@@ -42,6 +47,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
+use hyper_util::server::graceful::GracefulShutdown;
 use tokio::net::TcpListener;
 
 /// How long to wait before accepting again when the process is out of file descriptors.
@@ -51,7 +57,8 @@ const ACCEPT_BACKOFF: Duration = Duration::from_millis(100);
 const REPORT_PERIOD: Duration = Duration::from_secs(1);
 
 /// Builds the router from the registered routes, starts the runtime and serves, with each
-/// route's limits. Never returns: on a fatal error, reports it and exits with a non-zero code.
+/// route's limits, until `SIGTERM` or Ctrl-C. Never returns: exits with `0` after a graceful
+/// shutdown, and on a fatal error, reports it and exits with a non-zero code.
 pub fn run(config: Config, limits: RouteLimits) -> ! {
     if let Err(event) = error_codes::check_app_codes() {
         fail(event);
@@ -67,19 +74,23 @@ pub fn run(config: Config, limits: RouteLimits) -> ! {
     {
         Ok(runtime) => runtime,
         Err(error) => fail(
-            Event::coded(Level::Error, HTTP0007, &[("cause", &error.to_string())])
-                .with_cause(error),
+            Event::coded(Level::Error, RUN0001, &[("cause", &error.to_string())]).with_cause(error),
         ),
     };
     runtime.block_on(async {
+        for crash in balise_core::panic::previous_crashes() {
+            crash.emit();
+        }
         if let Err(event) = state::create(&state::STATES, registry::routes()).await {
             fail(event);
         }
         match bind(&config.address()).await {
-            Ok(listener) => serve(listener, server).await,
+            Ok(listener) => serve(listener, server, shutdown::signal()).await,
             Err(event) => fail(event),
         }
-    })
+    });
+    // Tasks still running past the shutdown timeout stop here.
+    std::process::exit(0)
 }
 
 /// Opens the listening socket, or the event explaining why it could not.
@@ -178,14 +189,15 @@ impl Throttle {
     }
 }
 
-/// Accepts connections forever. Each connection, and each request, runs in its own task:
-/// a client that disconnects does not cancel the handler.
-/// What every request needs: the routes, and the limits from configuration.
+/// What every request needs: the routes, their limits, and the state of the server.
 #[derive(Debug)]
 pub struct Server {
     router: Router,
     limits: RouteLimits,
     error_details: bool,
+    shutdown_timeout: Duration,
+    /// What `/ready` answers: true while connections are accepted.
+    ready: AtomicBool,
 }
 
 impl Server {
@@ -203,6 +215,8 @@ impl Server {
             router,
             limits,
             error_details: config.error_details,
+            shutdown_timeout: config.shutdown_timeout,
+            ready: AtomicBool::new(false),
         }
     }
 }
@@ -230,16 +244,28 @@ impl BodySource for HyperBody {
     }
 }
 
-pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
+/// Accepts connections until `shutdown` resolves, then waits for what is in progress (see
+/// [`shutdown`]). Each connection, and each request, runs in its own task: a client that
+/// disconnects does not cancel the handler.
+pub async fn serve(listener: TcpListener, server: Arc<Server>, shutdown: impl Future<Output = ()>) {
     log::set_context(current_request);
     let mut throttle = Throttle {
         last_report: None,
         unreported: 0,
     };
+    let connections = GracefulShutdown::new();
+    let mut shutdown = pin!(shutdown);
+    server.ready.store(true, Ordering::SeqCst);
     loop {
-        let (stream, peer) = match listener.accept().await {
-            Ok(accepted) => accepted,
-            Err(error) => {
+        let accepted = poll_fn(|cx| match shutdown.as_mut().poll(cx) {
+            Poll::Ready(()) => Poll::Ready(None),
+            Poll::Pending => listener.poll_accept(cx).map(Some),
+        })
+        .await;
+        let (stream, peer) = match accepted {
+            None => break,
+            Some(Ok(accepted)) => accepted,
+            Some(Err(error)) => {
                 match accept_error(&error) {
                     AcceptError::FromClient(event) => event.emit(),
                     AcceptError::OutOfFiles(event) => {
@@ -252,47 +278,73 @@ pub async fn serve(listener: TcpListener, server: Arc<Server>) -> ! {
             }
         };
         let server = server.clone();
+        let service = service_fn(move |request| respond(server.clone(), request));
+        let connection = http1::Builder::new().serve_connection(TokioIo::new(stream), service);
+        // Closed after its request in progress once the shutdown starts.
+        let connection = Catch(Box::pin(connections.watch(connection)));
         tokio::spawn(async move {
-            let service = service_fn(move |request| {
-                let server = server.clone();
-                async move {
-                    let started = Instant::now();
-                    let request_id = request_id();
-                    let method = request.method().to_string();
-                    let path = request.uri().path().to_string();
-                    let details = server.error_details;
-                    let task = tokio::spawn(handle(server, request, request_id.clone()));
-                    let (mut response, route) = match task.await {
-                        Ok(handled) => handled,
-                        // Panics become proper crash reports later; for now, a plain 500.
-                        Err(error) => {
-                            let cause = match error.try_into_panic() {
-                                Ok(panic) => panic_message("the handler panicked", &*panic),
-                                Err(error) => error.to_string(),
-                            };
-                            let error =
-                                Error::coded(500, EXT0001, &[("cause", &cause)]).with_cause(cause);
-                            (error.into_response(&request_id, details), None)
-                        }
-                    };
-                    let line = RequestLine {
-                        method,
-                        path,
-                        status: response.status,
-                        duration_us: started.elapsed().as_micros() as u64,
-                        queries: None,
-                    };
-                    log_request(line, &request_id, route, &mut response);
-                    Ok::<_, Infallible>(to_hyper(response))
-                }
-            });
-            if let Err(error) = http1::Builder::new()
-                .serve_connection(TokioIo::new(stream), service)
-                .await
-            {
-                connection_event(&error, peer).emit();
+            match connection.await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => connection_event(&error, peer).emit(),
+                Err(report) => report.event("A connection").emit(),
             }
         });
+    }
+    server.ready.store(false, Ordering::SeqCst);
+    drop(listener);
+    shutdown::drain(server.shutdown_timeout, connections).await;
+}
+
+/// Answers one request, and logs it.
+async fn respond(
+    server: Arc<Server>,
+    request: Request<Incoming>,
+) -> Result<Response<Full<Bytes>>, Infallible> {
+    let started = Instant::now();
+    let request_id = request_id();
+    let method = request.method().to_string();
+    let path = request.uri().path().to_string();
+    let details = server.error_details;
+    let task = tokio::spawn(Catch(Box::pin(handle(server, request, request_id.clone()))));
+    let (mut response, route) = match task.await {
+        Ok(Ok(handled)) => handled,
+        // The handler's own panic was answered inside; this one is Balise's.
+        Ok(Err(report)) => {
+            let error = Error::panicked("Balise's request handling", report);
+            (error.into_response(&request_id, details), None)
+        }
+        Err(error) => {
+            let cause = error.to_string();
+            let error = Error::coded(500, EXT0001, &[("cause", &cause)]).with_cause(cause);
+            (error.into_response(&request_id, details), None)
+        }
+    };
+    let health_check = method == "GET" && HEALTH_PATHS.contains(&path.as_str());
+    let line = RequestLine {
+        method,
+        path,
+        status: response.status,
+        duration_us: started.elapsed().as_micros() as u64,
+        queries: None,
+    };
+    log_request(line, &request_id, route, &mut response, health_check);
+    Ok(to_hyper(response))
+}
+
+/// `/health` and `/ready`, for orchestrators.
+fn health(server: &Server, path: &str) -> Option<handler::Response> {
+    let [health, ready] = HEALTH_PATHS;
+    let answer = |status, state: &str| {
+        Some(handler::Response::json(
+            status,
+            format!(r#"{{"status":"{state}"}}"#),
+        ))
+    };
+    match path {
+        p if p == health => answer(200, "ok"),
+        p if p == ready && server.ready.load(Ordering::SeqCst) => answer(200, "ready"),
+        p if p == ready => answer(503, "stopping"),
+        _ => None,
     }
 }
 
@@ -302,8 +354,12 @@ fn log_request(
     request_id: &str,
     route: Option<&'static Route>,
     response: &mut handler::Response,
+    health_check: bool,
 ) {
-    let handler = route.map(Route::handler_name);
+    let handler = match health_check {
+        true => Some("health check".to_string()),
+        false => route.map(Route::handler_name),
+    };
     let error = response.error.take();
     if let Some(error) = &error
         && error.status() >= 500
@@ -314,20 +370,15 @@ fn log_request(
         event.emit();
     }
     let mut summary = Event::request(line, request_id);
+    // Orchestrators ask every few seconds: their requests would drown the others.
+    if health_check {
+        summary.level = Level::Debug;
+    }
     summary.handler = handler;
     if let Some(error) = &error {
         error.summarize(&mut summary);
     }
     summary.emit();
-}
-
-/// The text a panic was raised with.
-fn panic_message(what: &str, panic: &(dyn std::any::Any + Send)) -> String {
-    match (panic.downcast_ref::<&str>(), panic.downcast_ref::<String>()) {
-        (Some(text), _) => format!("{what}: {text}"),
-        (_, Some(text)) => format!("{what}: {text}"),
-        _ => what.to_string(),
-    }
 }
 
 tokio::task_local! {
@@ -350,11 +401,17 @@ async fn handle(
     request: Request<Incoming>,
     request_id: String,
 ) -> (handler::Response, Option<&'static Route>) {
+    let _handling = tasks::REQUESTS.enter();
     let details = server.error_details;
     let fail = |error: Error| (error.into_response(&request_id, details), None);
     let (parts, body) = request.into_parts();
     let method = Method::parse(parts.method.as_str());
     let path = parts.uri.path();
+    if method == Some(Method::Get)
+        && let Some(response) = health(&server, path)
+    {
+        return (response, None);
+    }
     match server.router.find(method, path) {
         Match::Found {
             route,
@@ -382,11 +439,15 @@ async fn handle(
                 request_id: request_id.clone(),
                 error_details: details,
             };
-            let handler = tasks::watch((route.invoke)(request), "a handler");
+            let handler = Catch(tasks::watch((route.invoke)(request), "a handler"));
             let handler = REQUEST.scope((request_id.clone(), route), handler);
             // A timeout cancels the handler, reading of the body included.
             let response = match tokio::time::timeout(limits.timeout, handler).await {
-                Ok(response) => response,
+                Ok(Ok(response)) => response,
+                Ok(Err(report)) => {
+                    let what = format!("`{}`", route.handler_name());
+                    Error::panicked(&what, report).into_response(&request_id, details)
+                }
                 Err(_) => {
                     let timeout = format_duration(limits.timeout);
                     let handler = route.handler_name();

@@ -45,6 +45,7 @@ Sources, from highest to lowest priority:
 | `api.version` | none | `BALISE_API_VERSION` |
 | `limits.body_size` | `2MB` | `BALISE_LIMITS_BODY_SIZE` |
 | `limits.timeout` | `30s` | `BALISE_LIMITS_TIMEOUT` |
+| `shutdown.timeout` | `10s` | `BALISE_SHUTDOWN_TIMEOUT` |
 | `storage.dir` | `storage` | `BALISE_STORAGE_DIR` |
 | `pagination.per_page` | `20` | `BALISE_PAGINATION_PER_PAGE` |
 | `pagination.max_per_page` | `100` | `BALISE_PAGINATION_MAX_PER_PAGE` |
@@ -91,10 +92,10 @@ Practical points:
 
 What the binary provides for orchestrators (Docker, systemd, Kubernetes):
 
-- `/health` (process alive) and `/ready` (ready for traffic);
-- graceful shutdown on `SIGTERM` ([engine.md](engine.md#shutdown));
+- `/health` (process alive) and `/ready` (ready for traffic), at the root;
+- graceful shutdown on `SIGTERM`, for `shutdown.timeout` at most; the orchestrator's grace period must be longer ([engine.md](engine.md#shutdown));
 - JSON logs on stdout;
-- the crash report of the previous run, published at startup;
+- the crash report of a panic that stopped the previous run, published at startup, from `storage.dir`;
 - a summary of findings for agents in `balise-findings.json`, and `./app report` to export it with the database's real sizes ([errors-and-logs.md](errors-and-logs.md#production-findings));
 - migrations applied at startup under a PostgreSQL advisory lock, so several instances starting together do not race. Only frozen migrations reach production, and only compatible changes are applied during a rolling deploy; a breaking change is split over two versions or approved as a deploy with downtime ([data.md](data.md#compatible-and-breaking-changes)). A setting makes startup fail instead when a migration is pending, for teams that migrate in a separate step.
 

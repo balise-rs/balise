@@ -11,6 +11,10 @@ use crate::event::{Event, Level};
 use crate::handler::Method;
 use crate::registry::Route;
 
+/// Served by Balise at the root, outside the API base, for orchestrators: `/health` while
+/// the process runs, `/ready` while it accepts traffic.
+pub const HEALTH_PATHS: [&str; 2] = ["/health", "/ready"];
+
 /// The routes of the application, ready to match requests.
 #[derive(Debug)]
 pub struct Router {
@@ -46,8 +50,25 @@ impl Router {
     /// Builds the router, or the event naming two handlers that claim the same route.
     #[allow(clippy::result_large_err)] // startup only: the size costs nothing
     pub fn build(routes: &'static [Route], base: &str) -> Result<Router, Event> {
+        let base = base.trim_end_matches('/');
         let mut root = Node::default();
         for route in routes {
+            let full = format!("{base}{}", route.path);
+            if route.method == Method::Get && HEALTH_PATHS.contains(&full.as_str()) {
+                return Err(Event::coded(
+                    Level::Error,
+                    HTTP0010,
+                    &[
+                        ("method", route.method.as_str()),
+                        ("path", &full),
+                        (
+                            "first",
+                            &format!("{} ({})", route.handler_name(), route.location()),
+                        ),
+                        ("second", "Balise's health check"),
+                    ],
+                ));
+            }
             let mut node = &mut root;
             for segment in segments(route.path) {
                 node = if is_param(segment) {
@@ -61,7 +82,7 @@ impl Router {
             }
         }
         Ok(Router {
-            base: base.trim_end_matches('/').to_string(),
+            base: base.to_string(),
             root,
         })
     }
@@ -274,5 +295,15 @@ mod tests {
         let router = Router::build(routes![Get "/" "home"], "/api/v1").unwrap();
         assert_eq!(found(&router, Method::Get, "/api/v1").0, "orders::home");
         assert_eq!(found(&router, Method::Get, "/api/v1/").0, "orders::home");
+    }
+
+    #[test]
+    fn health_paths_belong_to_balise() {
+        let error = Router::build(routes![Get "/health" "health"], "").unwrap_err();
+        assert_eq!(
+            error.message,
+            "Two handlers for GET /health: orders::health (src/orders/mod.rs:1) and Balise's health check"
+        );
+        assert!(Router::build(routes![Get "/health" "health"], "/api").is_ok());
     }
 }

@@ -117,7 +117,11 @@ async fn state_is_shared_and_tasks_run_after_the_response() {
     );
     let listener = balise_engine::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(balise_engine::serve(listener, Arc::new(server)));
+    tokio::spawn(balise_engine::serve(
+        listener,
+        Arc::new(server),
+        std::future::pending(),
+    ));
 
     assert!(
         request(address, "GET", "/tea")

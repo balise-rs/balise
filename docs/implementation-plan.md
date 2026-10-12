@@ -67,9 +67,7 @@ Done !
 Done !
 
 ### 3.9 Shutdown, health, panics
-Implement graceful shutdown, `/health` and `/ready`, per-request panic handling and crash reports. Fold framework frames in backtraces.
-- More: [engine.md](engine.md#panics-and-supervision), [engine.md](engine.md#shutdown)
-- To decide: Tower or an in-house middleware model ([alternatives.md](alternatives.md))
+Done !
 
 ## 4. CLI
 
@@ -77,6 +75,7 @@ Implement graceful shutdown, `/health` and `/ready`, per-request panic handling 
 Generate a project from the templates (with `--no-<module>` and `--no-example`), check git and Docker, initialize the repository and print the help prompts when a tool is missing. The generated project must run as is.
 - More: [agent-experience.md](agent-experience.md#prerequisites-at-balise-new)
 - Also: the policy preset for sensitive decisions (`autonomous`, `strict`, `full-auto`), `[dev-dependencies]` with the `test` feature so `cargo test` works ([agent-experience.md](agent-experience.md#sensitive-decisions))
+- Also: `compose.yaml` derives `stop_grace_period` from `shutdown.timeout`, with a margin; the release profile keeps line tables (`debug = "line-tables-only"`) so production backtraces have lines ([engine.md](engine.md#shutdown))
 
 ### 4.2 `balise dev`
 Start the app, the database and Vite in Docker, with rebuild on change, supervision and one log stream. Support `--native`.
@@ -87,6 +86,7 @@ Start the app, the database and Vite in Docker, with rebuild on change, supervis
 Wrap `cargo check`, enrich diagnostics, apply the project lints, check schema drift and the generated client. Rank output: errors, new warnings, one summary line.
 - More: [errors-and-logs.md](errors-and-logs.md#compile-time-errors)
 - Also: two levels (incremental after each edit, full at the end of a task) and `--ci` with the release build ([agent-experience.md](agent-experience.md#hooks))
+- Also: report a `compose.yaml` whose `stop_grace_period` is not longer than `shutdown.timeout`
 
 ### 4.4 `routes`, `why`, `trace`, `explain`
 Implement the debugging commands, answered by the project's dev build so versions always match. Each one is also an MCP tool later.
@@ -218,6 +218,7 @@ Implement typed channels, SSE and WebSocket, bounded buffers, deferred publishin
 Implement cookie sessions and CSRF protection, with the token sent automatically by the generated client.
 - More: [web.md](web.md#authentication-for-spas)
 - To handle: session rotation at sign-in, revocation after a password reset, CSRF on the sign-in form ([web.md](web.md#open-questions))
+- To decide: a middleware model or not, on Tower or in-house, from the cross-cutting needs met here (sessions, CSRF, rate limits) ([alternatives.md](alternatives.md))
 
 ### 8.2 Generated routes and pages
 Generate sign-up, sign-in, sign-out, current user and password reset, with their pages when the project has a front end.

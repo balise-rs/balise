@@ -55,11 +55,13 @@ Rules:
  
 1. Load configuration from environment variables and `balise.toml`, then validate it (see [Configuration](#configuration)).
 2. Install the log subscriber, including the `log` bridge, so every event uses Balise's format.
-3. In production, publish the crash report left by the previous run, if any.
+3. Install Balise's panic hook, then publish the crash reports left by previous runs, if any (`RUN0007`).
 4. Build the routing table from the routes collected at compile time.
 5. Create shared state: database pool, the values of `#[balise::state]` functions, pub/sub hub. Check that every `State<T>` a route reads exists.
 6. Apply pending migrations under a lock, or refuse to start, depending on configuration ([data.md](data.md)).
 7. Start listening, then report ready on `/ready`.
+
+`/health` (the process runs) and `/ready` (it accepts traffic) are served at the root, outside the API base, for orchestrators. A route that would hide one of them stops the startup (`HTTP0010`). Their requests are logged at `debug` only: a probe every few seconds would drown the other lines.
 The application is built once. Nothing above runs again per request.
 
 `balise::run!()` is synchronous and never returns: it creates Tokio's multi-threaded runtime itself, so application code has no `#[tokio::main]` and no `Result` in `main`. A fatal error at startup (the port is taken: `HTTP0001`) is reported with its code, and the process exits with a non-zero code.
@@ -154,7 +156,7 @@ Handlers are monomorphized up to extraction, then type-erased behind one boxed i
 ## Errors
  
 - One error type, `balise::Error`, carries an HTTP status, a stable code, a message, a fix, where it was raised in application code, and the original cause. It does not implement `std::error::Error`, so `?` converts any other error into it; the location comes from `#[track_caller]` on the conversion, without a backtrace.
-- Applications return their own errors only through `#[derive(AppError)]`: there are no ad hoc constructors (`Error::conflict("…")`), which would carry neither a code nor a fix. Two variants with the same code stop the startup (`HTTP0013`).
+- Applications return their own errors only through `#[derive(AppError)]`: there are no ad hoc constructors (`Error::conflict("…")`), which would carry neither a code nor a fix. Two variants with the same code stop the startup (`RUN0002`).
 - Codes are grouped by area: `HTTP`, `VAL` (validation), `DB`, `AUTH`, `CFG`, `EXT`; applications add their own through `#[derive(AppError)]`.
 - Errors from delegated dependencies that Balise recognizes (hyper, I/O, drivers) are converted to Balise errors with their own codes. Anything unrecognized becomes `EXT0001`, which keeps the original message.
 - Connection errors caused by the client (a closed connection, bytes that are not HTTP) are `debug` events with `HTTP0002`: they are not errors of the server.
@@ -163,17 +165,20 @@ Full error and log format: [errors-and-logs.md](errors-and-logs.md).
  
 ## Panics and supervision
  
-- A panic in a handler is caught per request and turns into a `500` with a Balise log entry.
+- A panic is caught where it happens: in a handler, the request answers `500`; in a task, the task stops; in `balise::blocking`, it continues in the caller. Either way, one `RUN0006` event says where the panic was raised (the line of the `unwrap()`, thanks to `#[track_caller]`) and shows the application's frames, the others folded. A panic in a `#[balise::state]` function stops the startup with `RUN0005`.
+- Balise's panic hook replaces Rust's message on stderr for the panics it catches. It captures the backtrace only when a panic happens: requests pay nothing for it.
 - Shared state uses locks that are not poisoned, so one panic does not break the requests that follow.
-- Aborts, stack overflows, and allocation failures cannot be caught in the process:
-  - in dev, the CLI supervises the server, restarts it, and shows the crash report;
-  - in prod, the orchestrator (Docker, systemd, Kubernetes) restarts the process, and the next start publishes the crash report.
+- `panic = "abort"` in a profile is a compile error (`CMP0019`): one panic would stop every request in progress.
+- A panic Balise cannot catch stops the process: one in a thread started by hand, or a second one while the first unwinds (in a `Drop`). The hook writes a crash report to `<storage.dir>/.balise/crashes/` before the process stops; the next start publishes it (`RUN0007`) and deletes it. When several instances share the folder, the first to start publishes them.
+- Stack overflows and memory exhaustion leave no time to write anything: the process stops with Rust's message on stderr.
+  - in dev, the CLI supervises the server, restarts it, and shows that message;
+  - in prod, the orchestrator (Docker, systemd, Kubernetes) restarts the process and keeps its output.
 ## Diagnostics
  
 Delegated dependencies do the work below the facade, so an agent debugging a routing or network problem will be tempted to investigate them. Balise makes its own path shorter than that one:
  
 - No error, log, or crash report names a delegated crate. Network and connection errors carry `HTTP` or `EXT` codes with their own explanation.
-- Backtraces in dev show application frames first and fold framework and dependency frames into one line (`… 14 frames in the engine`).
+- Backtraces show the application's frames, from the one that panicked, and fold every run of other frames into one line (`… 14 frames outside the application`). Balise reads them from the standard library's text form; in production, frames have file and line only when the release profile keeps line tables.
 - `balise why <METHOD> <path>` explains a `404` or `405`: the routes that almost match and why they don't.
 - `balise trace <request_id>` (also an MCP tool) replays what happened to a request: routing decision, extracted parameters, queries, conversion of the error.
 - The generated `AGENTS.md` tells agents to debug through these tools and never inside dependencies.
@@ -181,13 +186,15 @@ This cannot stop an agent from opening `Cargo.lock` or a dependency's source, bu
  
 ## Shutdown
  
-On `SIGTERM`:
+On `SIGTERM`, or Ctrl-C:
  
 1. `/ready` starts failing, so load balancers stop sending traffic.
-2. The server stops accepting connections.
-3. In-flight requests finish, up to a configurable drain timeout (default 30 s).
+2. The server stops accepting connections; open connections close once their request in progress is answered.
+3. Requests in progress and background tasks (`balise::spawn`) finish, for `shutdown.timeout` at most (10 s by default). What is left then is cut and reported (`RUN0008`).
 4. WebSocket connections receive a close frame.
-5. The pool closes and the process exits.
+5. The pool closes and the process exits with `0`.
+
+The orchestrator must wait longer than `shutdown.timeout` before it kills the process. The generated `compose.yaml` derives its `stop_grace_period` from it, since Docker's default (10 s) leaves no margin; Kubernetes waits 30 s by default.
 ## Defaults
  
 | Setting | Default |
@@ -196,8 +203,8 @@ On `SIGTERM`:
 | Body size limit | 2 MB; routes with files: computed from the declared file sizes; per route: `body_size` in `budgets.toml` |
 | Page size | 20 items, 100 at most; per route: `page(default = …, max = …)` on its attribute |
 | Database query timeout | 10 s |
-| Shutdown drain timeout | 30 s |
-| Health endpoints | `/health` (process alive), `/ready` (ready for traffic) |
+| Shutdown timeout | 10 s (`shutdown.timeout`) |
+| Health endpoints | `/health` (process alive), `/ready` (ready for traffic), at the root |
  
 All defaults can be changed in `balise.toml`.
  
@@ -211,6 +218,6 @@ Compiled only in dev builds. A binary built with `dev` refuses to start with `BA
 - Proxy to the Vite dev server ([web.md](web.md)).
 ## Open questions
 
-- Middleware: build on Tower internally or write a small in-house model. Recorded in the log of alternatives ([alternatives.md](alternatives.md)).
+- Middleware: no model yet, the request pipeline is fixed code in the engine. Whether to build one, on Tower or in-house, is discussed with the first cross-cutting needs (sessions, CSRF, rate limits), in step 8.1 of the plan ([alternatives.md](alternatives.md)).
 - Handler execution: multi-threaded runtime (futures must be `Send`) or `spawn_local` on a runtime per core (no `Send` requirement). Also in the log of alternatives.
 - Compile-time route collection mechanism: distributed slices (`linkme`) or registration at startup (`inventory`).

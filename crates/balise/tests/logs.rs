@@ -63,7 +63,11 @@ async fn requests_are_logged_once_in_balise_format() {
     );
     let listener = balise_engine::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(balise_engine::serve(listener, Arc::new(server)));
+    tokio::spawn(balise_engine::serve(
+        listener,
+        Arc::new(server),
+        std::future::pending(),
+    ));
 
     request(address, "GET", "/api/orders/7").await;
     let response = request(address, "POST", "/api/reset?password=hunter2").await;

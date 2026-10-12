@@ -247,6 +247,13 @@ impl Event {
                         let _ = write!(out, "\n{indent}  {key}: {}", text_of(value));
                     }
                 }
+                // One line per item: `backtrace:`, then `  orders::get  src/orders/mod.rs:31`.
+                Value::Array(items) => {
+                    let _ = write!(out, "\n{indent}{name}:");
+                    for item in items {
+                        let _ = write!(out, "\n{indent}  {}", text_of(item));
+                    }
+                }
                 value => {
                     let _ = write!(out, "\n{indent}{name}: {}", text_of(value));
                 }
@@ -425,7 +432,7 @@ fn time_of_day(time_ms: u64) -> String {
 }
 
 /// `2026-10-11T12:02:11.478Z`.
-fn rfc3339(time_ms: u64) -> String {
+pub(crate) fn rfc3339(time_ms: u64) -> String {
     let days = (time_ms / 86_400_000) as i64;
     let (year, month, day) = civil_from_days(days);
     format!(

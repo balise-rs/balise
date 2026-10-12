@@ -86,7 +86,11 @@ async fn start(error_details: bool) -> std::net::SocketAddr {
     );
     let listener = balise_engine::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(balise_engine::serve(listener, Arc::new(server)));
+    tokio::spawn(balise_engine::serve(
+        listener,
+        Arc::new(server),
+        std::future::pending(),
+    ));
     address
 }
 

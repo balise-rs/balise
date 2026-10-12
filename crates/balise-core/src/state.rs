@@ -12,7 +12,7 @@ use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
 
 use crate::error::Error;
-use crate::error_codes::{HTTP0014, HTTP0015, HTTP0016};
+use crate::error_codes::{RUN0003, RUN0004, RUN0005};
 use crate::event::{Event, Level};
 use crate::handler::{FromRequest, Request};
 use crate::registry::Route;
@@ -37,10 +37,10 @@ impl<T> Clone for State<T> {
 
 impl<T: Send + Sync + 'static> State<T> {
     /// The value created at startup. The startup check guarantees it exists for every route;
-    /// a task asking for a state nobody declared gets `HTTP0014`.
+    /// a task asking for a state nobody declared gets `RUN0003`.
     fn get() -> Result<State<T>, Error> {
         let name = short_name(std::any::type_name::<T>());
-        let missing = || Error::coded(500, HTTP0014, &[("type", name), ("reader", "a task")]);
+        let missing = || Error::coded(500, RUN0003, &[("type", name), ("reader", "a task")]);
         let value = STORE.get().and_then(|store| store.get(&TypeId::of::<T>()));
         let value = value.ok_or_else(missing)?.clone();
         value.downcast::<T>().map(State).map_err(|_| missing())
@@ -128,7 +128,7 @@ pub async fn create(inits: &'static [StateInit], routes: &'static [Route]) -> Re
         if let Some((_, first)) = declared.iter().find(|(k, _)| k.id == key.id) {
             return Err(Event::coded(
                 Level::Error,
-                HTTP0015,
+                RUN0004,
                 &[
                     ("type", key.name),
                     (
@@ -145,14 +145,19 @@ pub async fn create(inits: &'static [StateInit], routes: &'static [Route]) -> Re
         declared.push((key, init));
     }
     for (key, init) in &declared {
-        match (init.create)().await {
+        // A panic is reported like an error, at the line that raised it.
+        let created = match crate::panic::Catch((init.create)()).await {
+            Ok(created) => created,
+            Err(report) => Err(Error::panicked(&format!("`{}`", init.function), report)),
+        };
+        match created {
             Ok(value) => {
                 store.insert(key.id, value);
             }
             Err(error) => {
                 let mut event = Event::coded(
                     Level::Error,
-                    HTTP0016,
+                    RUN0005,
                     &[("type", key.name), ("message", error.message())],
                 );
                 let from = error.event();
@@ -160,6 +165,7 @@ pub async fn create(inits: &'static [StateInit], routes: &'static [Route]) -> Re
                     .location
                     .or(Some(format!("{}:{}", init.file, init.line)));
                 event.cause = from.cause;
+                event.fields = from.fields;
                 return Err(event);
             }
         }
@@ -169,7 +175,7 @@ pub async fn create(inits: &'static [StateInit], routes: &'static [Route]) -> Re
             if !store.contains_key(&key.id) {
                 let reader = format!("`{}`", route.handler_name());
                 let args = [("type", key.name), ("reader", reader.as_str())];
-                let mut event = Event::coded(Level::Error, HTTP0014, &args);
+                let mut event = Event::coded(Level::Error, RUN0003, &args);
                 event.location = Some(route.location());
                 return Err(event);
             }
@@ -263,7 +269,7 @@ mod tests {
     fn a_state_a_route_reads_must_be_declared() {
         assert_eq!(
             message(start(vec![]).unwrap_err()),
-            "HTTP0014 No `#[balise::state]` creates `Cache`, which `prices::list` reads with `State<Cache>`"
+            "RUN0003 No `#[balise::state]` creates `Cache`, which `prices::list` reads with `State<Cache>`"
         );
     }
 
@@ -272,7 +278,7 @@ mod tests {
         let error = start(vec![init(cache, 3), init(cache, 9)]).unwrap_err();
         assert_eq!(
             message(error),
-            "HTTP0015 `Cache` is created by two `#[balise::state]` functions: \
+            "RUN0004 `Cache` is created by two `#[balise::state]` functions: \
              app::prices::cache (src/prices/mod.rs:3) and app::prices::cache (src/prices/mod.rs:9)"
         );
     }
@@ -286,7 +292,20 @@ mod tests {
         );
         assert_eq!(
             message(error),
-            "HTTP0016 Cannot create the state `Cache`: invalid digit found in string"
+            "RUN0005 Cannot create the state `Cache`: invalid digit found in string"
+        );
+    }
+
+    fn panicking() -> StateFuture {
+        Box::pin(async { panic!("no config") })
+    }
+
+    #[test]
+    fn a_state_that_panics_stops_the_startup_with_its_message() {
+        let error = start(vec![init(panicking, 3)]).unwrap_err();
+        assert_eq!(
+            message(error),
+            "RUN0005 Cannot create the state `Cache`: `app::prices::cache` panicked: no config"
         );
     }
 

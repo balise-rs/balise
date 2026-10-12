@@ -41,6 +41,7 @@ A code is an area prefix and four digits.
 | `AUTH` | authentication and permissions |
 | `RT` | realtime (WebSocket, SSE) |
 | `PERF` | performance warnings (N+1, slow query, blocked event loop…) |
+| `RUN` | the life of the process: startup checks, shared state, panics, crashes, shutdown |
 | `EXT` | errors from outside Balise that it could not classify |
 
 Applications define their own codes with `#[derive(AppError)]` and their own prefix (`ORD0001`), see [application.md](application.md#errors).
@@ -219,7 +220,20 @@ The report holds fingerprints and query shapes only, never query values, and the
 
 ## Panics and crashes
 
-A panic in a handler becomes a `500` with an error event. Crashes that cannot be caught produce a crash report with application frames first and framework frames folded. Details: [engine.md](engine.md#panics-and-supervision).
+A panic in a handler becomes a `500`, and in a task stops the task, with one `RUN0006` event: where the panic was raised, and the application's frames, the others folded.
+
+```
+14:02:11 ERROR RUN0006  `orders::get` panicked: called `Option::unwrap()` on a `None` value
+         at src/orders/mod.rs:31 in orders::get, request req_7f3a2c
+         backtrace:
+           orders::find  src/orders/model.rs:12
+           orders::get  src/orders/mod.rs:31
+           … 14 frames outside the application
+         fix: Fix the code at the location shown: a panic is a bug, such as an `unwrap()` on a value that can be missing. Return an error with `?` for what can fail.
+         more: balise explain RUN0006
+```
+
+A panic that cannot be caught leaves a crash report, published by the next start (`RUN0007`). Details: [engine.md](engine.md#panics-and-supervision).
 
 ## Open questions
 

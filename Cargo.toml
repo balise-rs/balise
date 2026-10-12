@@ -25,7 +25,7 @@ balise-dev = { path = "crates/balise-dev" }
 bytes = "1.12"
 http-body-util = "0.1.5"
 hyper = { version = "1.11", features = ["server", "http1"] }
-hyper-util = { version = "0.1.21", features = ["tokio"] }
+hyper-util = { version = "0.1.21", features = ["tokio", "server-graceful", "http1"] }
 linkme = "0.3.37"
 serde_json = "1.0.151"
 # Only to read balise.toml, with positions for error messages.
@@ -38,5 +38,5 @@ syn = { version = "3.0.6", features = ["full"] }
 
 # Tests
 trybuild = "1.0.121"
-tokio = { version = "1.53", features = ["rt-multi-thread", "net", "time", "sync"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "net", "time", "sync", "signal"] }
 

@@ -1,20 +1,23 @@
 //! Running work outside a request's own path: shared mutable state, blocking work,
-//! background tasks, and, in dev, the watch on tasks that hold the event loop.
+//! background tasks, what a shutdown waits for, and, in dev, the watch on tasks that hold
+//! the event loop.
 
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
-use std::panic::{AssertUnwindSafe, Location};
+use std::panic::Location;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use balise_core::error::Error;
-use balise_core::error_codes::{EXT0001, PERF0002};
+use balise_core::error_codes::PERF0002;
 use balise_core::event::{Event, Level};
+use balise_core::panic::{self, Catch};
 use balise_core::task::Task;
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{Notify, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::{REQUEST, current_request, panic_message};
+use crate::{REQUEST, current_request};
 
 /// Shared state that changes: `#[balise::state] fn counter() -> Shared<Counter>`, read with
 /// `State<Shared<Counter>>`. The lock waits without blocking the server, and a panic while
@@ -71,30 +74,42 @@ where
     T: Send + 'static,
 {
     let context = REQUEST.try_with(Clone::clone).ok();
-    let task = tokio::task::spawn_blocking(move || match context {
-        Some(context) => REQUEST.sync_scope(context, work),
-        None => work(),
+    let task = tokio::task::spawn_blocking(move || {
+        panic::catching(move || match context {
+            Some(context) => REQUEST.sync_scope(context, work),
+            None => work(),
+        })
     });
     match task.await {
-        Ok(value) => value,
-        // The panic continues in the caller, as if the work had run there.
+        Ok(Ok(value)) => value,
+        // The panic continues in the caller, with its report, as if the work had run there.
+        Ok(Err((report, payload))) => panic::rethrow(report, payload),
         Err(error) => std::panic::resume_unwind(error.into_panic()),
     }
 }
 
 /// Starts a background task: an `async move` closure whose parameters are services.
 ///
-/// It runs to the end even after the request that started it has answered. Its logs carry
-/// that request's ID. An error or a panic is logged with the line of this call.
+/// It runs to the end even after the request that started it has answered, and a shutdown
+/// waits for it. Its logs carry that request's ID. An error or a panic is logged with the
+/// line of this call.
 #[track_caller]
 pub fn spawn<Params>(task: impl Task<Params>) {
     let spawned_at = Location::caller();
     let context = REQUEST.try_with(Clone::clone).ok();
-    let future = CatchPanic(watch(task.into_future(), "a task"));
+    let running = TASKS.enter();
+    let future = Catch(watch(task.into_future(), "a task"));
     let run = async move {
+        let _running = running;
         let outcome = match future.await {
             Ok(result) => result,
-            Err(panic) => Err(Error::coded(500, EXT0001, &[("cause", &panic)]).with_cause(panic)),
+            Err(report) => {
+                let what = match current_request() {
+                    Some(context) => format!("A task started by `{}`", context.handler),
+                    None => "A task".to_string(),
+                };
+                Err(Error::panicked(&what, report))
+            }
         };
         if let Err(error) = outcome {
             let mut event = error.event();
@@ -115,18 +130,52 @@ pub fn spawn<Params>(task: impl Task<Params>) {
     };
 }
 
-/// A future whose panic is caught and returned as its message.
-struct CatchPanic<F>(F);
+/// What is in progress, for a shutdown to wait for it.
+pub(crate) struct Counter {
+    count: AtomicUsize,
+    idle: Notify,
+}
 
-impl<F: Future + Unpin> Future for CatchPanic<F> {
-    type Output = Result<F::Output, String>;
+/// Requests being handled, and background tasks running.
+pub(crate) static REQUESTS: Counter = Counter::new();
+pub(crate) static TASKS: Counter = Counter::new();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let inner = &mut self.0;
-        match std::panic::catch_unwind(AssertUnwindSafe(|| Pin::new(inner).poll(cx))) {
-            Ok(Poll::Ready(value)) => Poll::Ready(Ok(value)),
-            Ok(Poll::Pending) => Poll::Pending,
-            Err(panic) => Poll::Ready(Err(panic_message("the task panicked", &*panic))),
+impl Counter {
+    const fn new() -> Counter {
+        Counter {
+            count: AtomicUsize::new(0),
+            idle: Notify::const_new(),
+        }
+    }
+
+    /// Counts one more until the guard is dropped, cancelled or panicked included.
+    pub(crate) fn enter(&'static self) -> Entered {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        Entered(self)
+    }
+
+    pub(crate) fn get(&self) -> usize {
+        self.count.load(Ordering::SeqCst)
+    }
+
+    /// Returns once nothing is in progress.
+    pub(crate) async fn idle(&self) {
+        loop {
+            let notified = self.idle.notified();
+            if self.get() == 0 {
+                return;
+            }
+            notified.await;
+        }
+    }
+}
+
+pub(crate) struct Entered(&'static Counter);
+
+impl Drop for Entered {
+    fn drop(&mut self) {
+        if self.0.count.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.0.idle.notify_waiters();
         }
     }
 }
@@ -232,5 +281,22 @@ mod tests {
     #[tokio::test]
     async fn blocking_work_returns_its_value() {
         assert_eq!(blocking(|| 6 * 7).await, 42);
+    }
+
+    #[tokio::test]
+    async fn a_panic_in_blocking_work_keeps_its_report_in_the_caller() {
+        let caught = Catch(Box::pin(blocking(|| -> u32 { panic!("heavy") }))).await;
+        assert_eq!(caught.unwrap_err().message, "heavy");
+    }
+
+    #[tokio::test]
+    async fn a_counter_is_idle_once_every_guard_is_dropped() {
+        static COUNTER: Counter = Counter::new();
+        let entered = COUNTER.enter();
+        let idle = tokio::spawn(COUNTER.idle());
+        tokio::task::yield_now().await;
+        assert!(!idle.is_finished());
+        drop(entered);
+        idle.await.unwrap();
     }
 }

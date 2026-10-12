@@ -38,6 +38,7 @@ mod ext;
 mod file;
 mod http;
 mod perf;
+mod run;
 mod val;
 
 pub use cfg::*;
@@ -46,6 +47,7 @@ pub use ext::*;
 pub use file::*;
 pub use http::*;
 pub use perf::*;
+pub use run::*;
 pub use val::*;
 
 /// Every area, with its prefix and its codes.
@@ -56,12 +58,13 @@ pub const AREAS: &[(&str, &[&ErrorCode])] = &[
     ("FILE", file::ALL),
     ("HTTP", http::ALL),
     ("PERF", perf::ALL),
+    ("RUN", run::ALL),
     ("VAL", val::ALL),
 ];
 
 /// Prefixes that applications cannot use: Balise's areas, present and planned.
 pub const RESERVED_PREFIXES: &[&str] = &[
-    "AUTH", "CFG", "CMP", "DB", "DEV", "EXT", "FILE", "HTTP", "MAIL", "PERF", "RT", "VAL",
+    "AUTH", "CFG", "CMP", "DB", "DEV", "EXT", "FILE", "HTTP", "MAIL", "PERF", "RT", "RUN", "VAL",
 ];
 
 /// A registered error code. Only the registry and `AppError` can create one.
@@ -183,7 +186,7 @@ macro_rules! __register_app_code {
 }
 
 /// Checked at startup: two `AppError` variants of different enums with the same code
-/// (`HTTP0013`). Within one enum, the derive rejects it at compile time.
+/// (`RUN0002`). Within one enum, the derive rejects it at compile time.
 #[allow(clippy::result_large_err)] // startup only: the size costs nothing
 pub fn check_app_codes() -> Result<(), crate::event::Event> {
     let codes = app_codes();
@@ -191,7 +194,7 @@ pub fn check_app_codes() -> Result<(), crate::event::Event> {
         if let Some(other) = codes[i + 1..].iter().find(|c| c.code == code.code) {
             return Err(crate::event::Event::coded(
                 crate::event::Level::Error,
-                HTTP0013,
+                RUN0002,
                 &[
                     ("code", code.code),
                     ("first", &format!("`{}`", code.title)),

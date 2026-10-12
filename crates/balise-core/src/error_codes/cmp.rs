@@ -233,4 +233,14 @@ declares them on its attribute, without changing the others:
 error.
 "#,
     }
+    CMP0019 {
+        title: "Panics abort the process",
+        message: "This build aborts on panic (`panic = \"abort\"`): one panic would stop the whole server",
+        fix: "Remove `panic = \"abort\"` from the profiles in `Cargo.toml`.",
+        explanation: r#"
+Balise catches a panic in the request or the task that raised it, so that one bug fails one
+request instead of every request in progress. With `panic = "abort"`, nothing can be caught:
+the process stops at the first panic. `balise::run!()` refuses to compile such a build.
+"#,
+    }
 }
