@@ -61,7 +61,7 @@ Rules:
 6. Apply pending migrations under a lock, or refuse to start, depending on configuration ([data.md](data.md)).
 7. Start listening, then report ready on `/ready`.
 
-`/health` (the process runs) and `/ready` (it accepts traffic) are served at the root, outside the API base, for orchestrators. A route that would hide one of them stops the startup (`HTTP0010`). Their requests are logged at `debug` only: a probe every few seconds would drown the other lines.
+`/health` (the process runs) and `/ready` (it accepts traffic) are served at the root, outside the API base, for orchestrators. A route that would take one of them, possible only when `api.prefix` is `/`, stops the startup (`HTTP0014`): `/ready` must keep failing during a shutdown, which an application's handler would not do. Their requests are logged at `debug` only: a probe every few seconds would drown the other lines.
 The application is built once. Nothing above runs again per request.
 
 `balise::run!()` is synchronous and never returns: it creates Tokio's multi-threaded runtime itself, so application code has no `#[tokio::main]` and no `Result` in `main`. A fatal error at startup (the port is taken: `HTTP0001`) is reported with its code, and the process exits with a non-zero code.
@@ -88,9 +88,9 @@ The router is Balise's own, entirely: its answers (`404`, `405`, `balise why`) a
 
 - Each route attribute (`#[get]`, `#[post]`…) registers the handler in a compile-time collection. There is no central router to maintain. The collection is a static array filled by the linker (`linkme`), hidden behind Balise's own registry module: nothing runs before `main`, and the mechanism can be replaced without touching the macros or application code.
 - At startup, routes go into a tree of path segments that is never modified afterwards. The API base comes from configuration: `api.prefix` (`/api` by default), followed by `/v{api.version}` when a version is set. Route attributes never include it.
-- A static segment wins over a parameter: `/orders/new` is tried before `/orders/{id}`. When a path matches several routes, the first one in that order that accepts the method is chosen; when none does, the answer is `405` (`HTTP0009`) with an `Allow` header.
+- A static segment wins over a parameter: `/orders/new` is tried before `/orders/{id}`. When a path matches several routes, the first one in that order that accepts the method is chosen; when none does, the answer is `405` (`HTTP0008`) with an `Allow` header.
 - Paths are strict: `/orders/` is not `/orders`. Parameters are whole segments (`{id}`), percent-decoded.
-- Startup fails if two handlers claim the same method and path shape (`/orders/{id}` and `/orders/{order_id}` are the same), with `HTTP0010` naming both handlers and their locations.
+- Startup fails if two handlers claim the same method and path shape (`/orders/{id}` and `/orders/{order_id}` are the same), with `HTTP0009` naming both handlers and their locations.
 - The route macro also checks the handler's signature at compile time: unknown parameter type, two `Body` parameters, a `Path` count that does not match the route, `page(…)` on a handler without `PageParams`, an `Input` with files read by `Query`. Each case has its own error message.
 ## Handling a request
  
@@ -98,7 +98,7 @@ The router is Balise's own, entirely: its answers (`404`, `405`, `balise why`) a
 2. Balise assigns a request ID and starts a log span.
 3. The router finds the handler, or answers `404` / `405`.
 4. Middleware runs: the route's timeout, which covers everything after this step, CORS, compression.
-5. Extraction builds each parameter in the order of the signature, except the body, always last: a request that a cheaper parameter rejects (path, query, `CurrentUser`) is answered before a byte of its body is read. A path value of the wrong type answers `404` (`HTTP0011`), a body that is not a JSON object `400` (`VAL0002`), another content type `415` (`VAL0003`), a body over the limit `413` (`HTTP0012`, read no further than the limit), and validation errors `422` (`VAL0001`) with a code and a message per field, without calling the handler. Every request gets an identifier (`req_7f3a2c`), in every error body and in logs.
+5. Extraction builds each parameter in the order of the signature, except the body, always last: a request that a cheaper parameter rejects (path, query, `CurrentUser`) is answered before a byte of its body is read. A path value of the wrong type answers `404` (`HTTP0010`), a body that is not a JSON object `400` (`VAL0002`), another content type `415` (`VAL0003`), a body over the limit `413` (`HTTP0011`, read no further than the limit), and validation errors `422` (`VAL0001`) with a code and a message per field, without calling the handler. Every request gets an identifier (`req_7f3a2c`), in every error body and in logs.
 6. The handler runs.
 7. The result is converted into a response. Errors become responses with their code (see below).
 8. The request is logged once, with its duration, status, query count, and request ID.
@@ -136,7 +136,7 @@ body_size = "20MB"
 timeout = "2m"
 ```
 
-The global limit is never raised for one route's sake. A body over the limit answers `413` (`HTTP0012`), with the limit in the message. When the timeout runs out, the handler is cancelled: a client still sending its body gets `408` (`HTTP0017`), otherwise the answer is `503` (`HTTP0018`).
+The global limit is never raised for one route's sake. A body over the limit answers `413` (`HTTP0011`), with the limit in the message. When the timeout runs out, the handler is cancelled: a client still sending its body gets `408` (`HTTP0012`), otherwise the answer is `503` (`HTTP0013`).
 
 `budgets.toml` is embedded by `balise::run!()` like `balise.toml`, and required like it, even with only comments: cargo only rebuilds for files that already exist, so an optional file created later would be ignored until the next change of code. A section naming no handler (`CFG0009`), an unknown budget or an invalid value (`CFG0010`) stops the startup; `config check` reports them too.
 
@@ -152,7 +152,7 @@ Handlers are monomorphized up to extraction, then type-erased behind one boxed i
 - `balise::blocking` runs CPU-heavy work on Tokio's blocking pool, with the request's context so its logs keep their request. Work cannot be moved off the event loop automatically: in dev, every poll of a handler or task is timed, and one longer than 10 ms is reported with the handler (`PERF0002`). The production binary has no such timing.
 - `balise::spawn` runs background tasks: an `async` closure whose parameters are services (`FromTask`, like `FromRequest` for handlers). It inherits the request's context for its logs; its error or panic is logged with the line of `spawn`. The task gets its own `Db`, with the same transaction rules as a request ([data.md](data.md#side-effects-after-commit)).
 - **A handler runs to the end even if the client disconnects**: hyper drops the future on disconnection, so Balise runs each handler in its own task, and only the response is discarded.
-- **A route's timeout cancels the handler.** A timeout is a cancellation: the transaction rolls back, but external calls already sent are not undone. Without that, the timeout would protect from nothing. The client gets `503` (`HTTP0018`), or `408` (`HTTP0017`) if it was still sending its body.
+- **A route's timeout cancels the handler.** A timeout is a cancellation: the transaction rolls back, but external calls already sent are not undone. Without that, the timeout would protect from nothing. The client gets `503` (`HTTP0013`), or `408` (`HTTP0012`) if it was still sending its body.
 ## Errors
  
 - One error type, `balise::Error`, carries an HTTP status, a stable code, a message, a fix, where it was raised in application code, and the original cause. It does not implement `std::error::Error`, so `?` converts any other error into it; the location comes from `#[track_caller]` on the conversion, without a backtrace.
@@ -219,5 +219,6 @@ Compiled only in dev builds. A binary built with `dev` refuses to start with `BA
 ## Open questions
 
 - Middleware: no model yet, the request pipeline is fixed code in the engine. Whether to build one, on Tower or in-house, is discussed with the first cross-cutting needs (sessions, CSRF, rate limits), in step 8.1 of the plan ([alternatives.md](alternatives.md)).
+- Readiness checks: `/ready` only says the process accepts traffic. Modules such as the database pool will add their checks; whether an application can add its own (a service it cannot work without) is decided when a real case appears.
 - Handler execution: multi-threaded runtime (futures must be `Send`) or `spawn_local` on a runtime per core (no `Send` requirement). Also in the log of alternatives.
 - Compile-time route collection mechanism: distributed slices (`linkme`) or registration at startup (`inventory`).

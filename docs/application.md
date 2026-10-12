@@ -292,7 +292,7 @@ async fn visit(visits: State<Shared<Visits>>) -> Result<NoContent> {
 ## Heavy work and background tasks
  
 - CPU-heavy or blocking work (image processing, large computations, a synchronous library) goes in `balise::blocking(|| ...).await`, which keeps the server responsive and returns the closure's value. In dev, a handler or task that holds the event loop for more than 10 ms is reported (`PERF0002`).
-- A request has a timeout, 30 s by default (`limits.timeout`): past it, the handler is cancelled and the client gets a `503` (`HTTP0018`). Work that may take longer goes in a task. A route that must take longer raises its `timeout` in `budgets.toml`.
+- A request has a timeout, 30 s by default (`limits.timeout`): past it, the handler is cancelled and the client gets a `503` (`HTTP0013`). Work that may take longer goes in a task. A route that must take longer raises its `timeout` in `budgets.toml`.
 - Work that continues after the response goes in `balise::spawn`. A task is an `async move` closure whose parameters are services, like a handler's, and which returns `Result<()>`:
 
 ```rust

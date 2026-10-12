@@ -111,7 +111,7 @@ async fn path_values_arrive_unwrapped_and_typed() {
 
     let response = request(address, "GET /api/orders/abc HTTP/1.1", "").await;
     assert!(response.starts_with("HTTP/1.1 404"), "{response}");
-    assert!(response.contains(r#""code":"HTTP0011""#), "{response}");
+    assert!(response.contains(r#""code":"HTTP0010""#), "{response}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -155,7 +155,7 @@ async fn query_and_body_are_read_into_inputs() {
     let limit = balise_core::text::format_size(Config::default().body_size);
     assert!(
         response.contains(&format!(
-            r#""code":"HTTP0012","message":"The request body is larger than this route's limit of {limit}""#
+            r#""code":"HTTP0011","message":"The request body is larger than this route's limit of {limit}""#
         )),
         "{response}"
     );

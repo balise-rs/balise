@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::task::{Context, Poll};
 
 use crate::error::Error;
-use crate::error_codes::{HTTP0002, HTTP0012};
+use crate::error_codes::{HTTP0002, HTTP0011};
 use crate::text::format_size;
 
 /// Where the bytes of a body come from: the connection, or memory in tests.
@@ -106,7 +106,7 @@ impl RequestBody {
         self.limit
     }
 
-    /// The next chunk, `None` at the end. Past the limit, a `413` (`HTTP0012`); a client that
+    /// The next chunk, `None` at the end. Past the limit, a `413` (`HTTP0011`); a client that
     /// stops sending, a `400` (`HTTP0002`).
     pub async fn chunk(&mut self) -> Result<Option<Vec<u8>>, Error> {
         let Some(source) = self.source.as_mut() else {
@@ -120,7 +120,7 @@ impl RequestBody {
                 if self.read > self.limit {
                     self.finish();
                     let limit = format_size(self.limit);
-                    return Err(Error::coded(413, HTTP0012, &[("limit", &limit)]));
+                    return Err(Error::coded(413, HTTP0011, &[("limit", &limit)]));
                 }
                 Ok(Some(chunk))
             }

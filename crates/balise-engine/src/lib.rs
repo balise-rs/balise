@@ -28,8 +28,8 @@ use balise_core::config::Config;
 use balise_core::error::Error;
 use balise_core::error_codes;
 use balise_core::error_codes::{
-    EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0008, HTTP0009,
-    HTTP0017, HTTP0018, RUN0001,
+    EXT0001, HTTP0001, HTTP0002, HTTP0003, HTTP0004, HTTP0005, HTTP0006, HTTP0007, HTTP0008,
+    HTTP0012, HTTP0013, RUN0001,
 };
 use balise_core::event::{Event, Level, RequestLine};
 use balise_core::handler::{self, Method};
@@ -132,7 +132,7 @@ fn accept_error(error: &io::Error) -> AcceptError {
     }
     if is_out_of_files(error) {
         return AcceptError::OutOfFiles(
-            Event::coded(Level::Error, HTTP0008, &[]).with_cause(error),
+            Event::coded(Level::Error, HTTP0007, &[]).with_cause(error),
         );
     }
     AcceptError::Other(
@@ -453,8 +453,8 @@ async fn handle(
                     let handler = route.handler_name();
                     let args = [("timeout", timeout.as_str()), ("handler", handler.as_str())];
                     let error = match progress.get() {
-                        Progress::Reading => Error::coded(408, HTTP0017, &args),
-                        Progress::Waiting | Progress::Done => Error::coded(503, HTTP0018, &args),
+                        Progress::Reading => Error::coded(408, HTTP0012, &args),
+                        Progress::Waiting | Progress::Done => Error::coded(503, HTTP0013, &args),
                     };
                     error.into_response(&request_id, details)
                 }
@@ -466,7 +466,7 @@ async fn handle(
             let allowed = allowed.join(", ");
             let (mut response, route) = fail(Error::coded(
                 405,
-                HTTP0009,
+                HTTP0008,
                 &[
                     ("method", parts.method.as_str()),
                     ("path", path),
@@ -583,7 +583,7 @@ mod tests {
             last_report: None,
             unreported: 0,
         };
-        let event = || Event::coded(Level::Error, HTTP0008, &[]).with_cause("os error 24");
+        let event = || Event::coded(Level::Error, HTTP0007, &[]).with_cause("os error 24");
         let start = Instant::now();
 
         assert!(throttle.admit(event(), start).is_some());

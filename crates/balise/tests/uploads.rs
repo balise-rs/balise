@@ -238,7 +238,7 @@ async fn timeouts_tell_a_slow_client_from_a_slow_handler() {
     let response = send(address, "POST /api/slow HTTP/1.1", b"").await;
     assert!(response.starts_with("HTTP/1.1 503"), "{response}");
     assert!(
-        response.contains(r#""code":"HTTP0018","message":"`uploads::slow` did not answer within its timeout of 100 ms""#),
+        response.contains(r#""code":"HTTP0013","message":"`uploads::slow` did not answer within its timeout of 100 ms""#),
         "{response}"
     );
 
@@ -248,7 +248,7 @@ async fn timeouts_tell_a_slow_client_from_a_slow_handler() {
     let mut response = String::new();
     stream.read_to_string(&mut response).await.unwrap();
     assert!(response.starts_with("HTTP/1.1 408"), "{response}");
-    assert!(response.contains(r#""code":"HTTP0017""#), "{response}");
+    assert!(response.contains(r#""code":"HTTP0012""#), "{response}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

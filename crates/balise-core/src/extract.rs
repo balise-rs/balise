@@ -9,7 +9,7 @@ use std::future::Future;
 
 use crate::error::Error;
 use crate::error_codes::{
-    ErrorCode, HTTP0011, VAL0001, VAL0002, VAL0003, VAL0004, VAL0005, VAL0006, VAL0007,
+    ErrorCode, HTTP0010, VAL0001, VAL0002, VAL0003, VAL0004, VAL0005, VAL0006, VAL0007,
 };
 use crate::handler::{FromRequest, Request};
 use crate::input::{Fields, Input};
@@ -154,7 +154,7 @@ fn next_param<T: FromParam>(request: &mut Request) -> Result<T, Error> {
     T::from_param(&value).ok_or_else(|| {
         Error::coded(
             404,
-            HTTP0011,
+            HTTP0010,
             &[
                 ("name", &name),
                 ("expected", T::EXPECTED),
@@ -312,7 +312,7 @@ mod tests {
         assert_eq!(response.status, 404);
         assert_eq!(
             String::from_utf8(response.body).unwrap(),
-            r#"{"error":{"code":"HTTP0011","message":"`id` in the path is not a valid whole number: `abc`","request_id":"req_000001"}}"#
+            r#"{"error":{"code":"HTTP0010","message":"`id` in the path is not a valid whole number: `abc`","request_id":"req_000001"}}"#
         );
     }
 

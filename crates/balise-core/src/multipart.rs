@@ -10,7 +10,7 @@ use std::io::Write;
 
 use crate::body::RequestBody;
 use crate::error::Error;
-use crate::error_codes::{FILE0001, FILE0002, FILE0003, FILE0004, FILE0005, HTTP0012};
+use crate::error_codes::{FILE0001, FILE0002, FILE0003, FILE0004, FILE0005, HTTP0011};
 use crate::file::{self, File, FileSpec, SNIFF_LENGTH};
 use crate::input::{Fields, Raw};
 use crate::text::format_size;
@@ -46,7 +46,7 @@ pub(crate) async fn read(
                 text_size += piece.len();
                 if text_size > text_limit {
                     let limit = format_size(text_limit);
-                    return Err(Error::coded(413, HTTP0012, &[("limit", &limit)]));
+                    return Err(Error::coded(413, HTTP0011, &[("limit", &limit)]));
                 }
                 text.extend_from_slice(&piece);
             }

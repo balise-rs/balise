@@ -73,7 +73,7 @@ The app could not open the address it listens on, for a reason other than the co
 message.
 "#,
     }
-    HTTP0008 {
+    HTTP0007 {
         title: "Too many open files",
         message: "Cannot accept connections: too many open files",
         fix: "Raise the limit of open files (`ulimit -n`, or the container's `nofile` limit), or look for connections that are never closed.",
@@ -86,7 +86,7 @@ connections keeps growing while traffic does not, something keeps connections op
 that never closes them, or a handler that never finishes.
 "#,
     }
-    HTTP0009 {
+    HTTP0008 {
         title: "Method not allowed",
         message: "{method} is not allowed on {path}; allowed: {allowed}",
         fix: "Use one of the allowed methods, or add a route for this method.",
@@ -98,7 +98,7 @@ A common cause is a form or a client sending `POST` where the route expects `PUT
 `balise routes` lists every route with its method.
 "#,
     }
-    HTTP0010 {
+    HTTP0009 {
         title: "Duplicate route",
         message: "Two handlers for {method} {path}: {first} and {second}",
         fix: "Keep one of the two handlers, or change the path or the method of one of them.",
@@ -108,7 +108,7 @@ does not start. Paths are compared by shape: `/orders/{id}` and `/orders/{order_
 same route.
 "#,
     }
-    HTTP0011 {
+    HTTP0010 {
         title: "Invalid path parameter",
         message: "`{name}` in the path is not a valid {expected}: `{value}`",
         fix: "Use a URL whose parameters have the expected form; `balise routes` shows each route's parameters.",
@@ -118,7 +118,7 @@ path says `abc`). The URL designates nothing, so the answer is `404`, as for a r
 not exist.
 "#,
     }
-    HTTP0012 {
+    HTTP0011 {
         title: "Request body too large",
         message: "The request body is larger than this route's limit of {limit}",
         fix: "If the route is meant to receive bodies this large, raise its `body_size` in `budgets.toml`, under the handler's name. To receive files, declare `File` fields in the route's `Input`. Otherwise the client is sending more than the route accepts.",
@@ -144,7 +144,7 @@ The default limit of a route without files is set in `balise.toml`; `balise expl
 shows its value, and `balise routes` shows each route's limit and where it comes from.
 "#,
     }
-    HTTP0017 {
+    HTTP0012 {
         title: "Request body too slow",
         message: "The request body was not received within this route's timeout of {timeout}",
         fix: "If clients are expected to send this slowly (large uploads on slow connections), raise `timeout` for `{handler}` in `budgets.toml`. Otherwise nothing is wrong on the server.",
@@ -155,7 +155,7 @@ client was still sending the body when it ran out, so Balise stopped reading and
 `408`. Most often the client's connection is slow or stalled.
 "#,
     }
-    HTTP0018 {
+    HTTP0013 {
         title: "Handler timed out",
         message: "`{handler}` did not answer within its timeout of {timeout}",
         fix: "Find what the handler waits for (a slow query, an external call), make it faster, or move the work to `balise::spawn`. Raise `timeout` for `{handler}` in `budgets.toml` only if it must take this long.",
@@ -167,6 +167,21 @@ calls already sent are not undone.
 
 Work that is allowed to take long belongs in a background task (`balise::spawn`), with the
 client told that it was accepted (`Created<T>` or `NoContent`).
+"#,
+    }
+    HTTP0014 {
+        title: "Reserved path",
+        message: "`{path}` is reserved for Balise's health checks; `{handler}` cannot use it ({location})",
+        fix: "Choose another path for the handler, or another `api.prefix` than `/`.",
+        explanation: r#"
+Balise serves `/health` (the process runs) and `/ready` (it accepts traffic) at the root, for
+orchestrators. `/ready` starts failing as soon as a shutdown begins, so that load balancers
+stop sending traffic: a handler of the application on the same path would lose that, so
+it cannot take it. This only happens when `api.prefix` is `/`.
+
+To make readiness depend on more than the process (a service the app cannot work without),
+the need is recorded in the open questions of the engine: modules such as the database
+pool will add their own checks.
 "#,
     }
     HTTP0500 {

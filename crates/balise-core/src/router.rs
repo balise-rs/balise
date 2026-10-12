@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::error_codes::HTTP0010;
+use crate::error_codes::{HTTP0009, HTTP0014};
 use crate::event::{Event, Level};
 use crate::handler::Method;
 use crate::registry::Route;
@@ -57,15 +57,11 @@ impl Router {
             if route.method == Method::Get && HEALTH_PATHS.contains(&full.as_str()) {
                 return Err(Event::coded(
                     Level::Error,
-                    HTTP0010,
+                    HTTP0014,
                     &[
-                        ("method", route.method.as_str()),
                         ("path", &full),
-                        (
-                            "first",
-                            &format!("{} ({})", route.handler_name(), route.location()),
-                        ),
-                        ("second", "Balise's health check"),
+                        ("handler", &route.handler_name()),
+                        ("location", &route.location()),
                     ],
                 ));
             }
@@ -171,7 +167,7 @@ fn param_name(segment: &str) -> &str {
 fn duplicate(first: &Route, second: &Route) -> Event {
     Event::coded(
         Level::Error,
-        HTTP0010,
+        HTTP0009,
         &[
             ("method", second.method.as_str()),
             ("path", second.path),
@@ -283,7 +279,7 @@ mod tests {
             "/api",
         )
         .unwrap_err();
-        assert_eq!(error.code, Some(HTTP0010));
+        assert_eq!(error.code, Some(HTTP0009));
         assert_eq!(
             error.message,
             "Two handlers for GET /orders/{order_id}: orders::get (src/orders/mod.rs:1) and orders::show (src/orders/mod.rs:1)"
@@ -302,7 +298,7 @@ mod tests {
         let error = Router::build(routes![Get "/health" "health"], "").unwrap_err();
         assert_eq!(
             error.message,
-            "Two handlers for GET /health: orders::health (src/orders/mod.rs:1) and Balise's health check"
+            "`/health` is reserved for Balise's health checks; `orders::health` cannot use it (src/orders/mod.rs:1)"
         );
         assert!(Router::build(routes![Get "/health" "health"], "/api").is_ok());
     }
