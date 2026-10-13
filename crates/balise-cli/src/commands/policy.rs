@@ -119,6 +119,7 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
     Ok(Report {
         text: format!("The policy is now {preset}: .balise/policy.toml"),
         data: Value::Object(vec![("preset".into(), Value::String(preset.clone()))]),
+        exit: 0,
     })
 }
 

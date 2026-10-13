@@ -1,0 +1,19 @@
+# What application code does not use, and why: `balise check` reports each one with its
+# code and the Balise way to do it.
+disallowed-types = [
+    { path = "std::sync::Mutex", reason = "shared mutable state goes through `#[balise::state]`: balise explain CMP0024" },
+    { path = "std::cell::RefCell", reason = "shared mutable state goes through `#[balise::state]`: balise explain CMP0024" },
+]
+disallowed-macros = [
+    { path = "std::println", reason = "use `balise::log::info!`: balise explain CMP0025" },
+    { path = "std::print", reason = "use `balise::log::info!`: balise explain CMP0025" },
+    { path = "std::eprintln", reason = "use `balise::log::warn!`: balise explain CMP0025" },
+    { path = "std::eprint", reason = "use `balise::log::warn!`: balise explain CMP0025" },
+    { path = "std::dbg", reason = "use `balise::log::debug!`: balise explain CMP0025" },
+]
+disallowed-methods = [
+    { path = "std::thread::spawn", reason = "use `balise::spawn` or `balise::blocking`: balise explain CMP0026" },
+    { path = "tokio::spawn", reason = "use `balise::spawn`: balise explain CMP0026", allow-invalid = true },
+    { path = "tokio::task::spawn", reason = "use `balise::spawn`: balise explain CMP0026", allow-invalid = true },
+    { path = "tokio::task::spawn_blocking", reason = "use `balise::blocking`: balise explain CMP0026", allow-invalid = true },
+]

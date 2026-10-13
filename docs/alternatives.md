@@ -71,6 +71,7 @@ Option A is the one implemented first.
 | Recorded | Topic | Option A | Option B | Measured by | Status |
 | --- | --- | --- | --- | --- | --- |
 | 2026-10-10 | Hallucination traps | Hidden methods failing at compile time | Suggestions from `balise check` only | Agents | settled 2026-10-11 by review: A does not compile on stable; B, plus `on_unimplemented` for trait-bound cases ([decisions.md](decisions.md)) |
+| 2026-10-13 | Engine of `balise check` | `cargo clippy`, with the project's lints | `cargo check` (`--no-clippy`), lints only with `--ci` | Compile (check time per edit), errors caught | to test |
 | 2026-10-10 | Hook timing | `balise check` after each edit | Once at the end of a task | Agents (iterations, total time) | to test |
 | 2026-10-10 | Hook integration | `--hook` mode in the CLI, speaking each agent's hook protocol | Script in the project (`.claude/hooks/`) calling plain `balise check` | Agents (errors reaching the agent, false runs), on a real generated project | to test |
 | 2026-10-11 | Example resource in a new project | `orders` owned by the signed-in user, one model | (B) `orders` referencing a `Product` model, with a relation; (C) the relation shown in the docs only, not in the project | Agents: blind task "add a `Shop` that owns orders" on each variant, compare errors, invented names and conventions followed | to test |

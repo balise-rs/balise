@@ -54,6 +54,16 @@ impl Painter {
     pub fn warn(self, text: &str) -> String {
         self.paint(text, YELLOW)
     }
+    pub fn error(self, text: &str) -> String {
+        self.paint(text, &format!("{BOLD};{RED}"))
+    }
+    pub fn warning(self, text: &str) -> String {
+        self.paint(text, &format!("{BOLD};{YELLOW}"))
+    }
+    /// `fix:`, as in errors.
+    pub fn fix(self, text: &str) -> String {
+        self.paint(text, GREEN)
+    }
     pub fn accent(self, text: &str) -> String {
         self.paint(text, &format!("{BOLD};{CYAN}"))
     }

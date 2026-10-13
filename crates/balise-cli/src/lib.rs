@@ -6,6 +6,7 @@
 
 pub mod args;
 mod ask;
+pub mod check;
 mod commands;
 pub mod dev;
 mod project;
@@ -39,6 +40,7 @@ pub struct Command {
 pub const COMMANDS: &[&Command] = &[
     &commands::new::COMMAND,
     &commands::dev::COMMAND,
+    &commands::check::COMMAND,
     &commands::explain::COMMAND,
     &commands::policy::COMMAND,
 ];
@@ -60,6 +62,26 @@ pub struct Context<'a> {
 pub struct Report {
     pub text: String,
     pub data: Value,
+    /// `1` for a result that is a failure, such as `balise check` finding errors.
+    pub exit: u8,
+}
+
+impl Report {
+    pub fn new(text: String, data: Value) -> Report {
+        Report {
+            text,
+            data,
+            exit: 0,
+        }
+    }
+}
+
+/// What a run prints, and how it ends.
+pub struct Outcome {
+    pub text: String,
+    pub exit: u8,
+    /// Whether the command failed (a [`Failure`]), rather than reporting a result.
+    pub failed: bool,
 }
 
 /// Why a command failed, with its code and the exit code: `2` for a wrong usage, `1`
@@ -106,6 +128,28 @@ impl Failure {
         )
     }
 
+    /// Reads the JSON of a failure back, from a CLI run elsewhere (the dev container).
+    pub fn from_json(value: &Value) -> Option<Failure> {
+        let Value::Object(fields) = value else {
+            return None;
+        };
+        let (_, Value::Object(error)) = fields.iter().find(|(key, _)| key == "error")? else {
+            return None;
+        };
+        let text = |key: &str| {
+            error.iter().find_map(|(k, v)| match (k == key, v) {
+                (true, Value::String(text)) => Some(text.clone()),
+                _ => None,
+            })
+        };
+        Some(Failure {
+            code: balise_core::error_codes::find(&text("code")?)?,
+            message: text("message")?,
+            fix: text("fix")?,
+            exit: 1,
+        })
+    }
+
     fn json(&self) -> Value {
         Value::Object(vec![(
             "error".into(),
@@ -130,14 +174,21 @@ pub fn person_at_terminal() -> bool {
 /// Runs the command `args` names. Returns what to print on standard output and the exit
 /// code.
 pub fn run(args: &[String], context: &mut Context) -> (String, u8) {
+    let outcome = execute(args, context);
+    (outcome.text, outcome.exit)
+}
+
+/// [`run`], saying whether the command failed or reported a result.
+pub fn execute(args: &[String], context: &mut Context) -> Outcome {
     let json = args.iter().any(|arg| arg == "--json");
     let result = dispatch(args, context);
-    match (result, json) {
-        (Ok(report), false) => (report.text, 0),
-        (Ok(report), true) => (to_json(&report.data), 0),
-        (Err(failure), false) => (failure.report(), failure.exit),
-        (Err(failure), true) => (to_json(&failure.json()), failure.exit),
-    }
+    let (text, exit, failed) = match (result, json) {
+        (Ok(report), false) => (report.text, report.exit, false),
+        (Ok(report), true) => (to_json(&report.data), report.exit, false),
+        (Err(failure), false) => (failure.report(), failure.exit, true),
+        (Err(failure), true) => (to_json(&failure.json()), failure.exit, true),
+    };
+    Outcome { text, exit, failed }
 }
 
 fn dispatch(args: &[String], context: &mut Context) -> Result<Report, Failure> {
@@ -175,10 +226,7 @@ fn dispatch(args: &[String], context: &mut Context) -> Result<Report, Failure> {
 
 /// A report that is only text.
 pub(crate) fn text(text: String) -> Report {
-    Report {
-        data: Value::String(text.clone()),
-        text,
-    }
+    Report::new(text.clone(), Value::String(text))
 }
 
 /// `balise help`, or `balise help <command>`.

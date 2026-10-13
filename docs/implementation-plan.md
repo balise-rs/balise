@@ -81,9 +81,7 @@ Done !
 Done !
 
 ### 4.3 `balise check`
-Wrap `cargo check`, enrich diagnostics, apply the project lints, check schema drift and the generated client. Rank output: errors, new warnings, one summary line.
-- More: [errors-and-logs.md](errors-and-logs.md#compile-time-errors)
-- Also: two levels (incremental after each edit, full at the end of a task) and `--ci` with the release build ([agent-experience.md](agent-experience.md#hooks))
+Done !
 
 ### 4.4 `routes`, `why`, `trace`, `explain`
 Implement the debugging commands, answered by the project's dev build as subcommands of the app's binary (`./app routes`, `./app why …`) so versions always match. Each one is also an MCP tool later, from the same command registry.
@@ -95,6 +93,7 @@ Implement the debugging commands, answered by the project's dev build as subcomm
 Generate hooks for Claude Code and rules for Cursor, and an `AGENTS.md` describing conventions, commands and the working loop. Keep it short enough to stay in context.
 - More: [agent-experience.md](agent-experience.md#hooks)
 - To decide: `balise check` after each edit or at the end of a task ([alternatives.md](alternatives.md))
+- Also: `balise check --hook` and `balise audit --hook`, speaking the agent's hook protocol, with the two levels (incremental after each edit, full at the end of a task) ([agent-experience.md](agent-experience.md#hooks))
 
 ## 5. Agent experience
 
@@ -112,7 +111,7 @@ Generate the API reference and one page per error code at each release. Nothing 
 - More: [agent-experience.md](agent-experience.md#docs-for-models)
 
 ### 5.4 Hallucination traps
-Add the first traps for names agents commonly invent, failing at compile time with a custom message. Feed the `search_api` index with them.
+Extend the list of traps (`CMP0021`, rewritten by `balise check` since 4.3) with the names agents invent in evaluations, the ORM's included. Feed the `search_api` index with them.
 - More: [errors-and-logs.md](errors-and-logs.md#hallucination-traps)
 - Traps are rewritten by `balise check` from rustc's JSON, plus `on_unimplemented` for trait-bound cases ([errors-and-logs.md](errors-and-logs.md#hallucination-traps))
 
@@ -123,7 +122,7 @@ Run a set of tasks with agents on fresh projects and record the metrics. This is
 ## 6. Data
 
 ### 6.1 Models and schema snapshot
-Implement `#[derive(Model)]`, typed prefixed UUIDv7 ids, timestamps, and the schema snapshot with drift detection.
+Implement `#[derive(Model)]`, typed prefixed UUIDv7 ids, timestamps, and the schema snapshot with drift detection, reported by `balise check`.
 - More: [data.md](data.md#schema-models-are-the-source-of-truth), [data.md](data.md#identifiers)
 - To decide: database drivers, the first that works ([alternatives.md](alternatives.md))
 - To handle: prefix collisions and parsing errors for prefixed ids ([data.md](data.md#open-questions))

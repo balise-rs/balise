@@ -1,5 +1,5 @@
 # The dev stage of this project, built and run by `balise dev`: Rust at the version of
-# rust-toolchain.toml{{#if published}}, and the Balise CLI of the project's version{{/if}}.
+# rust-toolchain.toml, and the Balise CLI{{#if published}} of the project's version{{/if}}.
 # The code is not in the image: it is mounted when the container runs. Not for production.
 FROM rust:{{rust}}-slim AS dev
 {{#if published}}
@@ -7,6 +7,14 @@ FROM rust:{{rust}}-slim AS dev
 ARG BALISE_VERSION
 RUN CARGO_HOME=/tmp/cargo cargo install balise-cli --version "=${BALISE_VERSION}" --locked --root /usr/local \
     && rm -rf /tmp/cargo
+{{/if}}{{#if local}}
+# `balise-cli` builds the CLI from the local checkout of Balise (`--balise-path`), mounted
+# by compose, then runs it. The build is incremental, in the `target/` volume.
+RUN printf '%s\n' '#!/bin/sh' 'set -e' \
+    'install="cargo install --quiet --locked --path {{balise_path}}/crates/balise-cli --root /app/target/balise-cli --target-dir /app/target/balise-cli"' \
+    '(cd / && { $install --offline 2>/dev/null || $install; })' \
+    'exec /app/target/balise-cli/bin/balise-cli "$@"' \
+    > /usr/local/bin/balise-cli && chmod +x /usr/local/bin/balise-cli
 {{/if}}
 WORKDIR /app
 # The toolchain of rust-toolchain.toml, when it changed since the image's.

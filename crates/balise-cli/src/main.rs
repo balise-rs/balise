@@ -4,7 +4,7 @@
 use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
-use balise_cli::{Context, System, person_at_terminal, run, style};
+use balise_cli::{Context, Outcome, System, execute, person_at_terminal, style};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -22,16 +22,20 @@ fn main() -> ExitCode {
         machine: &System,
     };
     let json = args.iter().any(|arg| arg == "--json");
-    let (out, code) = run(&args, &mut context);
-    // A result goes to standard output, as JSON for programs; an error otherwise goes to
-    // standard error.
-    match (code, json) {
+    let Outcome {
+        text: out,
+        exit,
+        failed,
+    } = execute(&args, &mut context);
+    // A result goes to standard output, as JSON for programs, even when it ends in failure
+    // (`balise check` finding errors); an error otherwise goes to standard error.
+    match (failed, json) {
         (_, true) => println!("{out}"),
-        (0, false) => match style::wanted(std::io::stdout().is_terminal()) {
+        (false, false) => match style::wanted(std::io::stdout().is_terminal()) {
             true => println!("{}", style::colorize(&out)),
             false => println!("{out}"),
         },
-        _ => {
+        (true, false) => {
             let (label, out) = match style::wanted(std::io::stderr().is_terminal()) {
                 true => (style::error_label(), style::colorize(&out)),
                 false => ("error".to_string(), out),
@@ -39,5 +43,5 @@ fn main() -> ExitCode {
             let _ = writeln!(std::io::stderr(), "{label} {out}");
         }
     }
-    ExitCode::from(code)
+    ExitCode::from(exit)
 }

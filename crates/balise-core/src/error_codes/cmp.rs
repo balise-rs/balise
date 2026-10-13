@@ -243,4 +243,118 @@ request instead of every request in progress. With `panic = "abort"`, nothing ca
 the process stops at the first panic. `balise::run!()` refuses to compile such a build.
 "#,
     }
+    CMP0020 {
+        title: "Resource folder not declared",
+        message: "`src/{module}/` is not declared in `src/main.rs`: its routes are never compiled",
+        fix: "Add `mod {module};` to `src/main.rs`, or remove the folder.",
+        explanation: r#"
+Rust compiles only the modules a crate declares. A folder under `src/` without its `mod`
+line is ignored: its routes do not exist, and nothing else reports it, because nothing
+refers to them. `main.rs` declares one module per resource:
+
+    mod orders;
+
+    fn main() {
+        balise::run!();
+    }
+"#,
+    }
+    CMP0021 {
+        title: "Name from another framework",
+        message: "Balise has no `{name}`: it comes from {origin}",
+        fix: "{instead}",
+        explanation: r#"
+The name is common in another framework or library, and does not exist in Balise. The fix
+gives the Balise way to do the same thing. `balise::prelude::*` brings what handlers use:
+
+    use balise::prelude::*;
+
+    #[get("/orders/{id}")]
+    async fn get(id: Path<u32>, orders: State<Shared<Orders>>) -> Result<OrderView> { … }
+"#,
+    }
+    CMP0022 {
+        title: "Value kept across an await cannot move between threads",
+        message: "`{variable}` is kept across an `.await`, and its type `{type}` cannot move between threads",
+        fix: "End the use of `{variable}` before the `.await` (line {await_line}): put that code in a block `{ … }` that ends before it. Or use a type that can move: `Arc` instead of `Rc`, `Shared<T>` instead of `RefCell`.",
+        explanation: r#"
+The server runs handlers on several threads, and a handler can move to another thread at
+each `.await`. Every value still in use after an `.await` moves with it, so its type must
+allow it (`Send`). `Rc`, `RefCell` and the guard of a `std::sync::Mutex` do not.
+
+    let total = {
+        let cache = Rc::new(load());
+        cache.total()
+    }; // `cache` ends here
+    save(total).await;
+"#,
+    }
+    CMP0023 {
+        title: "Private item",
+        message: "`{name}` is private to its module",
+        fix: "Add `pub` to `{name}` where it is declared{at}, so that other modules can use it.",
+        explanation: r#"
+Items are private to their module by default. A handler that uses a struct, a field or a
+function of another module needs it declared `pub`:
+
+    pub struct OrderView {
+        pub id: u32,
+    }
+"#,
+    }
+    CMP0024 {
+        title: "Mutable state outside Balise",
+        message: "{what} is mutable state that Balise does not manage",
+        fix: "Keep shared state in a `#[balise::state]` function returning `Shared<T>`, and take it in handlers as `State<Shared<T>>`. Within one function, `let mut` is enough.",
+        explanation: r#"
+Global and shared mutable state (`static mut`, `std::sync::Mutex`, `RefCell`) breaks under
+concurrent requests, blocks the server's threads, or does not compile across an `.await`.
+Balise's state is created once at startup and shared safely:
+
+    #[balise::state]
+    fn orders() -> Shared<Orders> {
+        Shared::new(Orders::default())
+    }
+
+    #[get("/orders")]
+    async fn list(orders: State<Shared<Orders>>) -> Result<Vec<OrderView>> { … }
+"#,
+    }
+    CMP0025 {
+        title: "Printing outside the logs",
+        message: "`{name}!` writes outside Balise's logs",
+        fix: "Use `balise::log::info!(\"…\", field = value)`, or `debug!`, `warn!`, `error!`: the line gets the request's id and reaches `balise dev` and production logs.",
+        explanation: r#"
+Balise's logs are one stream, in text in dev and in JSON in production, where each line
+carries the request it belongs to. `println!`, `eprintln!` and `dbg!` write around it: their
+lines have no level, no request, and break the JSON.
+
+    balise::log::info!("Order paid", order_id = order.id);
+"#,
+    }
+    CMP0026 {
+        title: "Work started outside Balise",
+        message: "`{name}` starts work that Balise does not follow",
+        fix: "Use `balise::spawn(async move |…| { … })` for background work, and `balise::blocking(|| …)` for blocking code.",
+        explanation: r#"
+Balise waits for its tasks at shutdown, reports their panics and gives them their
+services. A thread or a Tokio task started directly escapes all of it: it is cut at
+shutdown, and its panics are lost.
+
+    balise::spawn(async move |orders: State<Shared<Orders>>| {
+        orders.write().await.archive_old();
+        Ok(())
+    });
+"#,
+    }
+    CMP0027 {
+        title: "Cargo stopped before compiling",
+        message: "`cargo` stopped before compiling the code: {cause}",
+        fix: "Read cargo's message: it usually points to `Cargo.toml`, or to a dependency that cannot be downloaded.",
+        explanation: r#"
+`balise check` runs `cargo clippy`. Cargo failed before reading the code: an invalid
+`Cargo.toml`, a dependency that does not exist or cannot be downloaded, or a missing
+component of the toolchain (`clippy`, installed by `rust-toolchain.toml` with rustup).
+"#,
+    }
 }

@@ -14,8 +14,12 @@ dev = ["balise/dev"]
 [lints.rust]
 deprecated = "deny"
 
+# Checked by `balise check`, which runs clippy; `clippy.toml` lists what is disallowed.
 [lints.clippy]
 await_holding_lock = "deny"
+disallowed_types = "deny"
+disallowed_macros = "deny"
+disallowed_methods = "deny"
 
 # Fast edit-compile loop: dependencies optimized once, your code compiled quickly.
 [profile.dev]

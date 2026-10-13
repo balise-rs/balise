@@ -23,16 +23,8 @@ services:
       - target:/app/target
       - registry:/usr/local/cargo/registry
       - git:/usr/local/cargo/git
-{{#if local}}      # The local checkout of Balise (`--balise-path`), and its CLI built from it.
+{{#if local}}      # The local checkout of Balise (`--balise-path`), which the CLI is built from.
       - {{balise_path}}:{{balise_path}}:ro
-    command:
-      - sh
-      - -c
-      - >-
-        export PATH="/app/target/balise-cli/bin:$$PATH"
-        && (cd / && cargo install --locked --path {{balise_path}}/crates/balise-cli
-        --root /app/target/balise-cli --target-dir /app/target/balise-cli)
-        && exec balise-cli dev --inside
 {{/if}}
 volumes:
   target:

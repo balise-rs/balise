@@ -120,4 +120,14 @@ read-only disk, or a full one. Nothing is left half written: remove the folder b
 trying again.
 "#,
     }
+    CLI0013 {
+        title: "Nothing to compile with",
+        message: "`balise {command}` needs Rust or Docker, and neither is installed",
+        fix: "Install Rust (https://rustup.rs) to compile on this machine, or Docker (https://docs.docker.com/get-docker/) to compile in the dev container.",
+        explanation: r#"
+Commands that compile the project run cargo on this machine when Rust is installed, and in
+the project's dev container otherwise, where the toolchain of `rust-toolchain.toml` is
+installed. Without either, nothing can compile it.
+"#,
+    }
 }

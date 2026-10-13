@@ -86,6 +86,7 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
                     ("answers".into(), Value::Bool(answers)),
                     ("url".into(), Value::String(compose.url())),
                 ]),
+                exit: 0,
             })
         }
         Some(_) => {
@@ -100,6 +101,7 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
                     compose.url()
                 ),
                 data: Value::Object(vec![("url".into(), Value::String(compose.url()))]),
+                exit: 0,
             })
         }
         None => {

@@ -539,5 +539,6 @@ fn report(
     Report {
         text: text.trim_end().to_string(),
         data,
+        exit: 0,
     }
 }

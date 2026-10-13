@@ -41,7 +41,7 @@ Errors of the CLI itself have codes in the `CLI` area, with their fix and explan
 | `balise policy preset <preset>` | choose who decides sensitive decisions, for all types at once; needs a terminal |
 | `balise policy set <type> human\|agent` | change who decides one type of sensitive decision; needs a terminal |
 | `balise audit` | run tests or a scenario and report performance problems |
-| `balise explain <CODE>` | explain an error code; `balise explain config` lists every setting and its default, `balise explain budgets` how default budgets are chosen |
+| `balise explain <CODE>` | explain an error code, Balise's or Rust's (`E0308`, explained by rustc); `balise explain config` lists every setting and its default, `balise explain budgets` how default budgets are chosen |
 | `balise search <name>` | find a name in Balise's API, or what to write instead of a name from another framework |
 | `balise introspect` | print the project map as JSON |
 | `balise routes` | list routes and handlers |

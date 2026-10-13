@@ -11,6 +11,9 @@ use std::time::Duration;
 use balise_core::error_codes::{DEV0004, DEV0005, DEV0006, DEV0007};
 use balise_core::router::HEALTH_PATHS;
 
+use balise_core::json;
+
+use crate::check::Checked;
 use crate::tools::{DOCKER, Machine};
 use crate::{Failure, project};
 
@@ -112,6 +115,47 @@ impl Compose {
         // `cargo` on this machine could not write any more.
         let _ = std::fs::create_dir_all(self.root.join("target"));
         self.run(args)
+    }
+
+    /// Runs `balise check` in the dev container, the running one or a temporary one, and
+    /// reads what it found.
+    pub fn check(&self, running: bool, ci: bool) -> Result<Checked, Failure> {
+        let script = r#"exec balise-cli check --json "$@""#;
+        let (command, how): (&str, &[&str]) = match running {
+            true => ("exec", &["exec", "-T", SERVICE]),
+            false => (
+                "run",
+                &["run", "--rm", "--build", "--no-deps", "-T", SERVICE],
+            ),
+        };
+        let mut args: Vec<&str> = how.to_vec();
+        args.extend(["sh", "-c", script, "sh"]);
+        if ci {
+            args.push("--ci");
+        }
+        let output = Command::new("docker")
+            .arg("compose")
+            .args(&args)
+            .current_dir(&self.root)
+            .envs(self.variables.iter().map(|(name, value)| (name, value)))
+            .stdin(Stdio::null())
+            .stderr(Stdio::inherit())
+            .output()
+            .map_err(|error| failed(command, &error.to_string()))?;
+        // Building the image, the first time, writes its progress before.
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let last = stdout.trim().lines().last().unwrap_or_default();
+        let value = json::parse(last.as_bytes()).map_err(|_| {
+            let cause = match last {
+                "" => super::app::describe(output.status),
+                text => text.to_string(),
+            };
+            failed(command, &cause)
+        })?;
+        if let Some(failure) = Failure::from_json(&value) {
+            return Err(failure);
+        }
+        Checked::from_value(&value).ok_or_else(|| failed(command, "unexpected output"))
     }
 
     /// Stops and removes the container. The volumes stay: the next start does not compile

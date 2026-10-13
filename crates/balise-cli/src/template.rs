@@ -155,9 +155,9 @@ mod tests {
 
         let image = file(Some("/src/balise"), "Dockerfile");
         assert!(!image.contains("BALISE_VERSION"));
+        assert!(image.contains("--path /src/balise/crates/balise-cli"));
         let compose = file(Some("/src/balise"), "compose.yaml");
         assert!(compose.contains("- /src/balise:/src/balise:ro"));
-        assert!(compose.contains("--path /src/balise/crates/balise-cli"));
         assert!(!compose.contains("BALISE_VERSION"));
     }
 }

@@ -144,14 +144,15 @@ The agent meets most errors at compile time. Balise improves them at four levels
 
 1. **Custom trait errors.** Balise's traits carry `#[diagnostic::on_unimplemented]`, so a wrong handler parameter or return type produces a Balise message instead of a generic trait-bound error.
 2. **Macro errors.** Route and model macros check their input and point to the exact line: unknown parameter type, two `Body` parameters, a `Path` count that doesn't match the route.
-3. **`balise check`.** It runs `cargo check`, reads the compiler's JSON diagnostics, and enriches the ones that involve Balise:
+3. **`balise check`.** It runs `cargo clippy`, which also applies the project's lints, reads the compiler's JSON diagnostics, and enriches the ones that involve Balise:
    - unknown method or type: the closest Balise API, its doc, and the MCP tool to call;
    - "future is not Send": the variable held across `.await` and how to fix it;
    - a resource folder whose module is not declared in `main.rs`: its routes are never compiled, so nothing else would report them missing;
    - a private field or type used from another module (E0616, E0603): the `pub` to add, and where;
-   - every diagnostic gets a `CMP` code and the same rendering as runtime errors;
+   - every diagnostic gets the same rendering as runtime errors; the ones Balise recognizes get a `CMP` code, the others keep rustc's (`E0308`), which agents know, or their lint's name (`unused_variables`). `balise explain E0308` shows rustc's explanation, so one command explains every code, and Balise can add its own words to some;
    - the location is where the fix goes, which is not always where rustc points: a query without an owner is reported at `Order::query()`, not at `.page()`;
-   - paths inside Balise or the registry are dropped, and the output ends with one summary line: errors, new warnings, known findings.
+   - paths inside Balise or the registry are dropped, and the output ends with one summary line: errors and warnings, then, with `balise audit`, new warnings and known findings;
+   - without Rust on the machine, it runs in the dev container (the running one, or a temporary one) and says so, since it is slower.
 
 ```
 error CMP0201  This query on Order does not say which user's rows it reads
@@ -169,8 +170,8 @@ error CMP0201  This query on Order does not say which user's rows it reads
 ✗ 1 error · 0 new warnings · 2 known findings (balise audit)
 ```
 
-`balise check --hook`, after each edit, prints a short form on stderr with exit code 2: the number of errors and the first three, with "finish your change, then fix"; `balise check --format json` gives the same data to tools and MCP.
-4. **Generated lints.** The generated `Cargo.toml` turns `deprecated` and `clippy::await_holding_lock` into errors. `balise check` also rejects `static mut`, global mutable state, `std::sync::Mutex`, `RefCell`, `tokio::spawn` and `println!` in application code.
+`balise check --hook`, after each edit, prints a short form on stderr with exit code 2: the number of errors and the first three, with "finish your change, then fix"; `balise check --json` gives the same data to tools and MCP. `balise check --ci` also checks formatting and the release build, and fails on warnings.
+4. **Generated lints.** The generated `Cargo.toml` turns `deprecated` and `clippy::await_holding_lock` into errors. Its `clippy.toml` disallows `std::sync::Mutex` and `RefCell` (`CMP0024`), `println!`, `eprintln!` and `dbg!` (`CMP0025`), `std::thread::spawn` and `tokio::spawn` (`CMP0026`) in application code, each with the reason and its code, so plain `cargo clippy` explains them too; `balise check` also rejects `static mut`, which no lint reports where it is declared.
 
 ### Hallucination traps
 

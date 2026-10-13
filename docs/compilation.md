@@ -17,7 +17,7 @@ In the framework's design:
 
 In the generated project:
  
-- The agent loop runs `balise check`, which uses `cargo check`. A full build happens only when the app is started.
+- The agent loop runs `balise check`, which uses `cargo clippy` (a `cargo check` that also applies the lints), in its own `target/check` folder. A full build happens only when the app is started.
 - Dependencies are optimized in dev; the user's code is not. Debug info is reduced to line tables.
 - The default linker is kept: rust-lld is already the default on Linux x86_64 since Rust 1.90.
 - `target/` and the Cargo registry are Docker volumes, so restarts do not recompile ([environments.md](environments.md#dev-with-docker)).
