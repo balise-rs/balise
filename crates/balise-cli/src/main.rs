@@ -30,6 +30,8 @@ fn main() -> ExitCode {
     // A result goes to standard output, as JSON for programs, even when it ends in failure
     // (`balise check` finding errors); an error otherwise goes to standard error.
     match (failed, json) {
+        // A hook says what it has to say on standard error, itself.
+        (false, _) if out.is_empty() => {}
         (_, true) => println!("{out}"),
         (false, false) => match style::wanted(std::io::stdout().is_terminal()) {
             true => println!("{}", style::colorize(&out)),

@@ -28,6 +28,7 @@ pub const COMMAND: Command = Command {
             "the supervisor inside the dev container; run by the container",
         ),
     ],
+    for_agents: true,
     exclusive: &[&["--native", "--inside", "--detach"]],
     run,
 };

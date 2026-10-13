@@ -48,6 +48,7 @@ pub const COMMAND: Command = Command {
             "the number of events shown (default: 30)",
         ),
     ],
+    for_agents: true,
     exclusive: &[],
     run,
 };

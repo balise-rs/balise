@@ -17,6 +17,7 @@ pub const COMMAND: Command = Command {
     summary: "Show what happened to a request in dev: its route, parameters, limits and events.",
     arguments: "<request_id>",
     options: &[],
+    for_agents: true,
     exclusive: &[],
     run,
 };

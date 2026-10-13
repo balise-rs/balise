@@ -62,6 +62,7 @@ pub const COMMAND: Command = Command {
             "use a local checkout of Balise, to work on Balise itself",
         ),
     ],
+    for_agents: false,
     exclusive: &[&["--front", "--no-front"]],
     run,
 };

@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "balise check --hook",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(balise check)",
+      "Bash(balise check:*)",
+      "Bash(balise routes)",
+      "Bash(balise why:*)",
+      "Bash(balise trace:*)",
+      "Bash(balise logs)",
+      "Bash(balise logs:*)",
+      "Bash(balise explain:*)",
+      "Bash(balise dev status)",
+      "Bash(balise config check)",
+      "Bash(balise config check:*)"
+    ],
+    "deny": [
+      "Edit(.balise/policy.toml)",
+      "Write(.balise/policy.toml)"
+    ]
+  }
+}

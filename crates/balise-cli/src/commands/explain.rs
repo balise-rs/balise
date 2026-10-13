@@ -11,6 +11,7 @@ pub const COMMAND: Command = Command {
     summary: "Explain an error code, Balise's (`HTTP0003`) or Rust's (`E0308`): why it happens and how to fix it. `balise explain config` lists every setting.",
     arguments: "<CODE>",
     options: &[],
+    for_agents: true,
     exclusive: &[],
     run,
 };

@@ -87,10 +87,7 @@ Done !
 Done !
 
 ### 4.5 Agent hooks and generated `AGENTS.md`
-Generate hooks for Claude Code and rules for Cursor, and an `AGENTS.md` describing conventions, commands and the working loop. Keep it short enough to stay in context.
-- More: [agent-experience.md](agent-experience.md#hooks)
-- To decide: `balise check` after each edit or at the end of a task ([alternatives.md](alternatives.md))
-- Also: `balise check --hook` and `balise audit --hook`, speaking the agent's hook protocol, with the two levels (incremental after each edit, full at the end of a task) ([agent-experience.md](agent-experience.md#hooks))
+Done !
 
 ## 5. Agent experience
 
@@ -98,6 +95,7 @@ Generate hooks for Claude Code and rules for Cursor, and an `AGENTS.md` describi
 Implement `balise mcp` as a stdio relay to the dev server, with `project_map`, `search_api`, `explain` and `check`. Write tools come later.
 - More: [agent-experience.md](agent-experience.md#mcp)
 - Each tool served by what it needs: `search_api`, `explain`, `check` without the dev server, `project_map` from the last successful build; `logs` and `approve` are in the MVP ([agent-experience.md](agent-experience.md#mcp))
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ### 5.2 Introspection
 Expose routes, inputs, outputs, models, schema and enabled modules as JSON, from the project's dev build. MCP and `balise introspect` share it.
@@ -106,6 +104,7 @@ Expose routes, inputs, outputs, models, schema and enabled modules as JSON, from
 ### 5.3 `llms.txt` and error pages
 Generate the API reference and one page per error code at each release. Nothing is written by hand.
 - More: [agent-experience.md](agent-experience.md#docs-for-models)
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ### 5.4 Hallucination traps
 Extend the list of traps (`CMP0021`, rewritten by `balise check` since 4.3) with the names agents invent in evaluations, the ORM's included. Feed the `search_api` index with them.
@@ -132,6 +131,7 @@ Implement `#[derive(Model)]`, typed prefixed UUIDv7 ids, timestamps, and the sch
 ### 6.2 Migrations
 Generate migrations from the snapshot diff, with three-step data migrations, `balise rename`, rename questions, one draft regenerated freely and frozen by `balise migrate freeze` (squash and resource removal rewrite it), compatible / breaking classification, failure instead of questions, and `balise remove resource`. Show a summary before applying.
 - More: [data.md](data.md#migrations-can-be-edited), [data.md](data.md#renames)
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ### 6.3 Queries and raw SQL
 Implement the closure-based query builder, the terminal methods and the `.limit()` / `.unbounded()` rule. Add raw SQL checked against the snapshot.
@@ -176,6 +176,7 @@ Derive factories from models and inputs, with reproducible seeds, the `dev` data
 - To decide: fresh database or rollback per test ([alternatives.md](alternatives.md))
 - To decide: the verb to set factory fields, the same as `create` ([data.md](data.md#open-questions))
 - Also: `balise test`, which starts the test database, then runs `cargo test` ([agent-experience.md](agent-experience.md#the-cli))
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ## 7. Web
 
@@ -183,6 +184,7 @@ Derive factories from models and inputs, with reproducible seeds, the `dev` data
 Generate types, route functions, limits and validation rules from Rust. `balise check` fails when the client is out of date.
 - More: [web.md](web.md#generated-client)
 - To handle: case conversion generated per field, never on whole objects ([web.md](web.md#open-questions))
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ### 7.2 React template and `@balise-rs/react`
 Create the React template with a working example resource, and the adapter hooks over TanStack Query.
@@ -214,6 +216,7 @@ Implement cookie sessions and CSRF protection, with the token sent automatically
 - More: [web.md](web.md#authentication-for-spas)
 - To handle: session rotation at sign-in, revocation after a password reset, CSRF on the sign-in form ([web.md](web.md#open-questions))
 - To decide: a middleware model or not, on Tower or in-house, from the cross-cutting needs met here (sessions, CSRF, rate limits) ([alternatives.md](alternatives.md))
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ### 8.2 Generated routes and pages
 Generate sign-up, sign-in, sign-out, current user and password reset, with their pages when the project has a front end.
@@ -240,10 +243,13 @@ Add `queries` and `response_size` to `budgets.toml` (which already holds `body_s
 - More: [agent-experience.md](agent-experience.md#budgets)
 - Every test request checks its route's budget; no per-test assertion; raising a budget is a sensitive decision
 - Also: `balise approve` and `balise approvals`, with this first type of sensitive decision; `balise explain budgets` ([agent-experience.md](agent-experience.md#sensitive-decisions))
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ### 9.4 `balise audit` and audit at scale
 Replay scenarios, rank findings, fill tables to their declared sizes with uneven distributions, and measure before and after fixes.
 - More: [agent-experience.md](agent-experience.md#guided-optimization), [data.md](data.md#four-levels)
+- Also: the end-of-task hook becomes `balise audit --hook`, which includes `check`
+- Also: its part of the generated `AGENTS.md` and `.claude/settings.json`; tests check that every command for agents and every rule is there ([agent-experience.md](agent-experience.md#hooks))
 
 ### 9.5 Noise control
 Implement `.accept()` with reasons and approval, reconsideration when sizes grow, the baseline, and `balise fix` for safe fixes.

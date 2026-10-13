@@ -3,7 +3,8 @@
 //! Files ending in `.tpl` are rendered: `{{name}}` takes a value, `{{#if flag}}…{{/if}}` keeps
 //! its content when the flag is set. Other files are copied as they are. Names that would
 //! change how the template is packaged are written differently: `gitignore` is
-//! `.gitignore`, `dockerignore` is `.dockerignore`, and `Cargo.toml.tpl` and `Cargo.lock.tpl` are not a package of their own.
+//! `.gitignore`, `dockerignore` is `.dockerignore`, `claude/` is `.claude/`, and
+//! `Cargo.toml.tpl` and `Cargo.lock.tpl` are not a package of their own.
 //!
 //! `Cargo.lock.tpl` pins every third-party crate as Balise is tested; a test keeps it equal
 //! to the workspace's lockfile.
@@ -51,6 +52,7 @@ pub fn render(choices: &Choices) -> Vec<(String, Vec<u8>)> {
             let path = match path {
                 "gitignore" => ".gitignore",
                 "dockerignore" => ".dockerignore",
+                "claude/settings.json" => ".claude/settings.json",
                 path => path,
             };
             (path.to_string(), content)
@@ -159,5 +161,100 @@ mod tests {
         let compose = file(Some("/src/balise"), "compose.yaml");
         assert!(compose.contains("- /src/balise:/src/balise:ro"));
         assert!(!compose.contains("BALISE_VERSION"));
+    }
+
+    fn agents(example: bool) -> String {
+        let choices = Choices {
+            name: "shop",
+            dependency: "\"=0.1.0\"",
+            checkout: None,
+            example,
+        };
+        let (_, content) = render(&choices)
+            .into_iter()
+            .find(|(path, _)| path == "AGENTS.md")
+            .unwrap();
+        String::from_utf8(content).unwrap()
+    }
+
+    /// The commands a text names: `balise check`, `balise dev status`…
+    fn commands_named(text: &str) -> Vec<String> {
+        text.split("`balise ")
+            .skip(1)
+            .map(|rest| {
+                rest.chars()
+                    .take_while(|c| c.is_ascii_lowercase())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    /// `AGENTS.md` names only commands that exist, and every command for agents: a new
+    /// command cannot be forgotten there.
+    #[test]
+    fn agents_md_follows_the_commands() {
+        for example in [true, false] {
+            let text = agents(example);
+            let named = commands_named(&text);
+            for name in &named {
+                assert!(
+                    crate::COMMANDS.iter().any(|command| command.name == name),
+                    "AGENTS.md names `balise {name}`, which does not exist"
+                );
+            }
+            for command in crate::COMMANDS.iter().filter(|c| c.for_agents) {
+                assert!(
+                    named.iter().any(|name| name == command.name),
+                    "AGENTS.md does not say when to use `balise {}`",
+                    command.name
+                );
+            }
+        }
+    }
+
+    /// Every path `clippy.toml` disallows is a rule of `AGENTS.md`.
+    #[test]
+    fn agents_md_states_what_clippy_disallows() {
+        let (_, clippy) = files::FILES
+            .iter()
+            .find(|(path, _)| *path == "clippy.toml")
+            .unwrap();
+        let clippy = std::str::from_utf8(clippy).unwrap();
+        let text = agents(false);
+        for path in clippy.split("path = \"").skip(1) {
+            let path = path.split('"').next().unwrap();
+            let name = path.rsplit("::").next().unwrap();
+            assert!(text.contains(name), "AGENTS.md does not mention `{path}`");
+        }
+    }
+
+    /// The Claude Code settings allow only commands that exist, and its hook is `check`'s.
+    #[test]
+    fn claude_settings_name_real_commands() {
+        let choices = Choices {
+            name: "shop",
+            dependency: "\"=0.1.0\"",
+            checkout: None,
+            example: false,
+        };
+        let (_, content) = render(&choices)
+            .into_iter()
+            .find(|(path, _)| path == ".claude/settings.json")
+            .unwrap();
+        let text = String::from_utf8(content).unwrap();
+        balise_core::json::parse(text.as_bytes()).unwrap();
+        for allowed in text.split("Bash(balise ").skip(1) {
+            let name: String = allowed
+                .chars()
+                .take_while(|c| c.is_ascii_lowercase())
+                .collect();
+            assert!(
+                crate::COMMANDS.iter().any(|command| command.name == name),
+                "`balise {name}` is allowed, and does not exist"
+            );
+        }
+        let check = crate::COMMANDS.iter().find(|c| c.name == "check").unwrap();
+        assert!(text.contains("\"command\": \"balise check --hook\""));
+        assert!(check.options.iter().any(|option| option.name == "--hook"));
     }
 }

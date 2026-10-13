@@ -259,3 +259,58 @@ fn rust_codes_are_explained_by_rustc() {
         "{out}"
     );
 }
+
+/// Runs `balise check --hook` with the hook's JSON on standard input; returns the exit code
+/// and what it wrote for the agent.
+fn hook(root: &Path, input: &str) -> (u8, String) {
+    let args: Vec<String> = ["check", "--hook"].iter().map(|a| a.to_string()).collect();
+    let mut input = input.as_bytes();
+    let mut said = Vec::new();
+    let mut context = Context {
+        cwd: root.to_path_buf(),
+        interactive: false,
+        input: &mut input,
+        output: &mut said,
+        color: false,
+        machine: &RUST,
+    };
+    let (out, code) = run(&args, &mut context);
+    assert_eq!(out, "");
+    (code, String::from_utf8(said).unwrap())
+}
+
+#[test]
+fn the_end_of_task_hook_blocks_once_on_what_is_left() {
+    let root = project("hook");
+    add(
+        &root,
+        "use balise::prelude::*;\n\n#[get(\"/n\")]\nasync fn n() -> NoContent {\n    let n: u32 = \"a\";\n    NoContent\n}\n",
+    );
+    let (code, said) = hook(
+        &root,
+        r#"{"hook_event_name":"Stop","stop_hook_active":false}"#,
+    );
+    assert_eq!(code, 2);
+    assert!(
+        said.starts_with("balise check: 1 error · 0 warnings left. Fix them before finishing:\n\nerror E0308 at src/bad.rs:5 in bad::n: mismatched types\n"),
+        "{said}"
+    );
+    // Blocked once already: the agent may finish.
+    let (code, said) = hook(
+        &root,
+        r#"{"hook_event_name":"Stop","stop_hook_active":true}"#,
+    );
+    assert_eq!((code, said.as_str()), (0, ""));
+    let (code, said) = hook(&root, r#"{"hook_event_name":"PostToolUse"}"#);
+    assert_eq!((code, said.as_str()), (0, ""));
+    std::fs::write(
+        root.join("src/bad.rs"),
+        "use balise::prelude::*;\n\n#[get(\"/n\")]\nasync fn n() -> NoContent {\n    NoContent\n}\n",
+    )
+    .unwrap();
+    let (code, said) = hook(
+        &root,
+        r#"{"hook_event_name":"Stop","stop_hook_active":false}"#,
+    );
+    assert_eq!((code, said.as_str()), (0, ""));
+}

@@ -46,6 +46,7 @@ cargo hack check --feature-powerset --depth 2
 
 - Stable toolchain only.
 - If the public API changes: update `docs/application.md` and `llms.txt`.
+- If a command or a rule for agents changes: update the generated `AGENTS.md` (`crates/balise-cli/template/AGENTS.md.tpl`); tests fail until it names every command for agents and every rule of `clippy.toml`.
 - If the change touches macros or public generics: run the compile-time benchmark and report the difference in the description.
 
 ## Language

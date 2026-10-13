@@ -14,6 +14,7 @@ pub const COMMAND: Command = Command {
     summary: "Choose who takes sensitive decisions: `balise policy preset autonomous|strict|full-auto`, or one type at a time with `balise policy set <type> human|agent`. Needs a terminal.",
     arguments: "preset <preset> | set <type> human|agent",
     options: &[],
+    for_agents: false,
     exclusive: &[],
     run,
 };

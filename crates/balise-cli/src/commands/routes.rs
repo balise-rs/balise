@@ -15,6 +15,7 @@ pub const COMMAND: Command = Command {
     summary: "List the routes, with their handler, where it is, and their limits.",
     arguments: "",
     options: &[],
+    for_agents: true,
     exclusive: &[],
     run,
 };

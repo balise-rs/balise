@@ -14,6 +14,7 @@ pub const COMMAND: Command = Command {
     summary: "Say which route answers a request, or why none does: `balise why GET /api/orders/5`.",
     arguments: "<METHOD> <path>",
     options: &[],
+    for_agents: true,
     exclusive: &[],
     run,
 };

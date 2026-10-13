@@ -16,6 +16,7 @@ pub const COMMAND: Command = Command {
         &["dev", "test", "prod"],
         "the environment to check (default: dev)",
     )],
+    for_agents: true,
     exclusive: &[],
     run,
 };

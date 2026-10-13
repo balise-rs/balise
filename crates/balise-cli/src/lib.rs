@@ -36,6 +36,9 @@ pub struct Command {
     pub options: &'static [Opt],
     /// Groups of options of which at most one may be given.
     pub exclusive: &'static [&'static [&'static str]],
+    /// Whether agents use it in a project: the generated `AGENTS.md` must say so, which a
+    /// test checks.
+    pub for_agents: bool,
     pub run: fn(&Parsed, &mut Context) -> Result<Report, Failure>,
 }
 

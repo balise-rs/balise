@@ -169,7 +169,7 @@ Guided recipes, such as "add a CRUD resource" or "fix all audit warnings", which
 
 ## Docs for models
 
-- **`AGENTS.md`**, generated in every project: conventions, commands, the working loop, the rule to debug through Balise and never inside dependencies, and the project's enabled modules. Short enough to stay in context.
+- **`AGENTS.md`**, generated in every project: conventions, commands, the working loop, the API in brief, the rule to debug through Balise and never inside dependencies, and the project's enabled modules. Short enough to stay in context. The mock-up's (`mockup/AGENTS.md`) is the target for the MVP; the generated one names only what exists ([Hooks](#hooks)).
 - **`llms.txt`**: a compact reference of the whole public API, generated from the source for each release.
 - **Error explanations**: read from the error registry by `balise explain` and MCP ([errors-and-logs.md](errors-and-logs.md#codes)).
 
@@ -177,23 +177,20 @@ Docs are generated, never written by hand, so they cannot drift from the code.
 
 ## Hooks
 
-Agents run `cargo check` by habit, not `balise check`. `balise new` therefore installs hooks for common agents, so feedback does not depend on the agent remembering:
+Agents run `cargo check` by habit, not `balise check`. `balise new` therefore installs a hook for Claude Code, so feedback does not depend on the agent remembering, and writes the working loop in `AGENTS.md`, which Cursor, Codex and other agents read; `CLAUDE.md` only imports it.
 
-- Claude Code: hooks after each edit and at the end of a task;
-- Cursor: project rules that call the same commands;
-- other agents: the same instructions in `AGENTS.md`.
+The hook is a plain project file, versioned with the code (`.claude/settings.json`). At the end of a task (`Stop`), it runs `balise check --hook`: in this mode the CLI reads the hook's JSON on standard input, checks the project, and, when errors or warnings are left, writes them in short on standard error with exit code `2`, which keeps the agent working on them. It blocks once: when the agent continues because of it (`stop_hook_active`), it lets it finish, so that it never loops on what it cannot fix. When the check itself cannot run (no Rust and no Docker, cargo failing), it exits with `1`: the user sees why, the agent is not blocked. The same file allows the read-only commands (`check`, `routes`, `why`, `trace`, `logs`, `explain`, `dev status`, `config check`) without asking, and denies editing `.balise/policy.toml`.
 
-Hooks are plain project files, versioned with the code. They call `balise check --hook` and `balise audit --hook`: in this mode the CLI speaks the agent's hook protocol, reads the JSON describing the edit, skips files that are neither Rust nor TypeScript, and reports where the agent sees it (on Claude Code: stderr with exit code 2).
-
-Checks run at two levels, plus CI:
+Checks run at two levels:
 
 | When | What runs | Effect |
 | --- | --- | --- |
-| after each edit (`check --hook`) | incremental `cargo check` for a `.rs` file, `tsc --incremental` for a `.ts` file | short output: the number of errors and the first three, with "finish your change, then fix". A new edit cancels the check in progress |
-| end of task (`audit --hook`) | ESLint, schema drift, tests, audit, runtime errors seen in dev, sensitive decisions pending in `agent` mode | blocks on what the agent can fix |
-| CI (`check --ci`) | everything, plus the release build and decisions pending in `human` mode | fails |
+| end of task (`check --hook`, later `audit --hook`) | `balise check`; with `audit`, also ESLint, schema drift, tests, runtime errors seen in dev, sensitive decisions pending in `agent` mode | blocks once on what the agent can fix |
+| CI (`check --ci`) | everything, plus formatting, the release build and decisions pending in `human` mode | fails |
 
-A change across several files is not interrupted, and the slow checks run once per task. Whether checking after each edit is worth it is measured in the [log of alternatives](alternatives.md).
+No hook runs after each edit: even incremental, a compilation takes seconds, and the agent would wait at every file of a change; what can be checked in a few milliseconds (the syntax of the edited file) is not where agents make mistakes. `AGENTS.md` asks for `balise check` after each coherent change instead. Whether a check after each edit is worth it is measured in the [log of alternatives](alternatives.md).
+
+`AGENTS.md` only names what works in the project's version. Tests keep it so: it names only commands that exist, every command meant for agents, and every rule of `clippy.toml`; each step that adds a command or a module adds its part.
 
 ## Sensitive decisions
 
