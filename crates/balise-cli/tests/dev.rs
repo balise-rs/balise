@@ -113,6 +113,7 @@ fn balise(cwd: &Path, args: &[&str], machine: &Quiet) -> (String, u8) {
         interactive: false,
         input: &mut input,
         output: &mut asked,
+        color: false,
         machine,
     };
     run(&args, &mut context)
@@ -232,6 +233,10 @@ fn the_supervisor_rebuilds_and_keeps_the_last_version_running() {
         answers("v1"),
     );
     assert!(logs.text().contains("Building app"), "{}", logs.text());
+    let ready = format!("Ready: http://localhost:{port}/api");
+    wait(Duration::from_secs(5), "ready", &logs, || {
+        logs.text().contains(&ready)
+    });
 
     std::fs::write(root.join("src/hello.rs"), hello("v2")).unwrap();
     wait(Duration::from_secs(120), "rebuild", &logs, answers("v2"));

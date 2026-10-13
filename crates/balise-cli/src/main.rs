@@ -16,6 +16,9 @@ fn main() -> ExitCode {
         interactive: person_at_terminal(),
         input: &mut input,
         output: &mut questions,
+        // Questions go to standard error, results to standard output: both must be a terminal.
+        color: style::wanted(std::io::stdout().is_terminal())
+            && style::wanted(std::io::stderr().is_terminal()),
         machine: &System,
     };
     let json = args.iter().any(|arg| arg == "--json");

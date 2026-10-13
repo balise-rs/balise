@@ -4,6 +4,7 @@
 
 const RED: &str = "31";
 const GREEN: &str = "32";
+const YELLOW: &str = "33";
 const CYAN: &str = "36";
 const BOLD: &str = "1";
 const DIM: &str = "2";
@@ -25,10 +26,45 @@ pub fn error_label() -> String {
     paint("error", &format!("{BOLD};{RED}"))
 }
 
-/// Colors the text of a result or an error, line by line.
+/// Explicit colors, for what a command shows a person and styles itself: the questions and
+/// the result of `balise new`. Without colors, the text is unchanged.
+#[derive(Clone, Copy)]
+pub struct Painter(pub bool);
+
+impl Painter {
+    fn paint(self, text: &str, style: &str) -> String {
+        match self.0 {
+            true => paint(text, style),
+            false => text.to_string(),
+        }
+    }
+    pub fn bold(self, text: &str) -> String {
+        self.paint(text, BOLD)
+    }
+    pub fn dim(self, text: &str) -> String {
+        self.paint(text, DIM)
+    }
+    /// A command to run, or a value to type.
+    pub fn command(self, text: &str) -> String {
+        self.paint(text, CYAN)
+    }
+    pub fn success(self, text: &str) -> String {
+        self.paint(text, &format!("{BOLD};{GREEN}"))
+    }
+    pub fn warn(self, text: &str) -> String {
+        self.paint(text, YELLOW)
+    }
+    pub fn accent(self, text: &str) -> String {
+        self.paint(text, &format!("{BOLD};{CYAN}"))
+    }
+}
+
+/// Colors the text of a result or an error, line by line. A line a command already styled is
+/// left as it is.
 pub fn colorize(text: &str) -> String {
     text.lines()
         .map(|line| match line.starts_with("    ") {
+            _ if line.contains('\x1b') => line.to_string(),
             // Indented by four spaces: an example, as in explanations.
             true => paint(line, DIM),
             false => colorize_line(line),

@@ -82,6 +82,7 @@ fn balise(
         interactive,
         input: &mut input,
         output: &mut asked,
+        color: false,
         machine,
     };
     let (out, code) = run(&args, &mut context);

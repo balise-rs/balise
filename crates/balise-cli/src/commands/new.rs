@@ -12,6 +12,7 @@ use balise_core::json::Value;
 
 use crate::args::{Opt, Parsed};
 use crate::commands::policy;
+use crate::style::Painter;
 use crate::template::{self, Choices};
 use crate::tools::{DOCKER, GIT, Tool};
 use crate::{Command, Context, Failure, Report, ask, missing};
@@ -87,9 +88,10 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
             &[],
         ));
     }
+    let p = Painter(context.color);
     if context.interactive {
-        let _ = writeln!(context.output, "\n{}", summary(&plan));
-        if !ask::confirm(context, "Create the project?", true) {
+        let _ = writeln!(context.output, "\n{}", summary(&plan, p));
+        if !ask::confirm(context, "\nCreate the project?", true) {
             return Ok(crate::text("Nothing was created.".into()));
         }
     }
@@ -123,20 +125,22 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
         missing_tools.push(&DOCKER);
     }
     let prompts = write_prompts(context, &root, &missing_tools)?;
-    Ok(report(
-        &plan,
-        &root,
-        git,
-        docker,
-        &prompts,
-        &notes,
-        context.interactive,
-    ))
+    Ok(report(&plan, &root, git, docker, &prompts, &notes, context))
 }
 
 /// Settles every choice: flags first, then a question in a terminal, then a default or an
 /// error without one.
 fn decide(parsed: &Parsed, context: &mut Context) -> Result<Plan, Failure> {
+    if context.interactive {
+        let p = Painter(context.color);
+        let _ = writeln!(
+            context.output,
+            "{} {} {}",
+            p.accent("Balise"),
+            p.dim(VERSION),
+            p.bold("· a new project")
+        );
+    }
     let name = match parsed.positionals.first() {
         Some(name) => name.clone(),
         None if context.interactive => match ask::line(context, "Project name") {
@@ -382,14 +386,17 @@ fn write_prompts(context: &Context, root: &Path, tools: &[&Tool]) -> Result<Vec<
 }
 
 /// The choices, before creating: what the user confirms.
-fn summary(plan: &Plan) -> String {
-    format!(
-        "Project   {}\nFront end {}\nExample   {}\nPolicy    {}",
-        plan.name,
-        plan.front.as_deref().unwrap_or("none"),
-        if plan.example { "orders" } else { "none" },
-        plan.policy
-    )
+fn summary(plan: &Plan, p: Painter) -> String {
+    [
+        ("Project", plan.name.as_str()),
+        ("Front end", plan.front.as_deref().unwrap_or("none")),
+        ("Example", if plan.example { "orders" } else { "none" }),
+        ("Policy", plan.policy.as_str()),
+    ]
+    .iter()
+    .map(|(label, value)| format!("  {} {}", p.dim(&format!("{label:<9}")), p.bold(value)))
+    .collect::<Vec<_>>()
+    .join("\n")
 }
 
 /// The same project, with flags only.
@@ -415,32 +422,50 @@ fn report(
     docker: &str,
     prompts: &[String],
     notes: &[String],
-    interactive: bool,
+    context: &Context,
 ) -> Report {
-    let mut text = format!("Created {}/ (Balise {VERSION})\n", plan.name);
+    let interactive = context.interactive;
+    let p = Painter(context.color);
+    // A person gets a mark of success, and a farewell; an agent the facts alone.
+    let mut text = match interactive {
+        true => format!(
+            "\n{} {}\n",
+            p.success(&format!("✔ Created {}/", plan.name)),
+            p.dim(&format!("(Balise {VERSION})"))
+        ),
+        false => format!("Created {}/ (Balise {VERSION})\n", plan.name),
+    };
     if !plan.defaults.is_empty() {
-        text.push_str("\nDefaults applied:\n");
+        text.push_str(&format!("\n{}\n", p.bold("Defaults applied:")));
         for (choice, value, change) in &plan.defaults {
-            text.push_str(&format!("  {choice:<9} {value:<9} {change}\n"));
+            let value = p.bold(&format!("{value:<9}"));
+            text.push_str(&format!("  {choice:<9} {value} {}\n", p.dim(change)));
         }
         text.push_str(&format!(
-            "\nRecreate with other choices (nothing to lose yet):\n  rm -r {} && {}\n",
-            plan.name,
-            equivalent_command(plan)
+            "\n{}\n  {}\n",
+            p.bold("Recreate with other choices (nothing to lose yet):"),
+            p.command(&format!(
+                "rm -r {} && {}",
+                plan.name,
+                equivalent_command(plan)
+            ))
         ));
     }
     if interactive {
         text.push_str(&format!(
-            "\nThe same project without questions:\n  {}\n",
-            equivalent_command(plan)
+            "\n{}\n  {}\n",
+            p.bold("The same project without questions:"),
+            p.command(&equivalent_command(plan))
         ));
     }
     if plan.policy == "strict" && !interactive {
-        text.push_str(
+        text.push_str(&format!(
             "\nPolicy: strict (every sensitive decision waits for the user).\n\
-             Ask the user to choose how much you decide alone, in their terminal:\n  \
-             balise policy preset autonomous   (recommended)\n",
-        );
+             {}\n  {}   {}\n",
+            p.bold("Ask the user to choose how much you decide alone, in their terminal:"),
+            p.command("balise policy preset autonomous"),
+            p.dim("(recommended)")
+        ));
     }
     let missing: Vec<&str> = [(git, "git"), (docker, "Docker")]
         .into_iter()
@@ -448,30 +473,39 @@ fn report(
         .map(|(_, name)| name)
         .collect();
     if !missing.is_empty() {
-        text.push_str(&format!(
-            "\n{} not installed. The project is created; to install and learn {}, give these prompts to your agent:\n",
+        let warning = format!(
+            "{} not installed. The project is created; to install and learn {}, give these prompts to your agent:",
             missing.join(" and "),
             if missing.len() == 1 { "it" } else { "them" }
-        ));
+        );
+        text.push_str(&format!("\n{}\n", p.warn(&warning)));
         for prompt in prompts {
-            text.push_str(&format!("  {}/{prompt}\n", plan.name));
+            text.push_str(&format!(
+                "  {}\n",
+                p.command(&format!("{}/{prompt}", plan.name))
+            ));
         }
     }
     if docker == "stopped" {
-        text.push_str(
-            "\nDocker is installed but not running: start it before running the app in Docker.\n",
-        );
+        let warning =
+            "Docker is installed but not running: start it before running the app in Docker.";
+        text.push_str(&format!("\n{}\n", p.warn(warning)));
     }
     for note in notes {
         text.push_str(&format!("\n{note}\n"));
     }
     let config = Config::defaults(Environment::Dev);
+    let url = format!("http://localhost:{}{}", config.port, config.api_base());
     text.push_str(&format!(
-        "\nNext:\n  cd {}\n  balise dev     # the API on http://localhost:{}{}\n",
-        plan.name,
-        config.port,
-        config.api_base()
+        "\n{}\n  {}\n  {}     {}\n",
+        p.bold("Next:"),
+        p.command(&format!("cd {}", plan.name)),
+        p.command("balise dev"),
+        p.dim(&format!("# the API on {url}"))
     ));
+    if interactive {
+        text.push_str(&format!("\n{}\n", p.accent("Happy building!")));
+    }
 
     let defaults = plan
         .defaults

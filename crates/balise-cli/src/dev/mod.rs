@@ -52,7 +52,14 @@ pub fn supervise(
     // The app gets the time its own shutdown takes, and a little more. The app inherits
     // this process's variables: the configuration is read with them.
     let variables: Vec<(String, String)> = std::env::vars().collect();
-    let grace = project::config(root, &variables).shutdown_timeout + GRACE_MARGIN;
+    let config = project::config(root, &variables);
+    let grace = config.shutdown_timeout + GRACE_MARGIN;
+    // In a container, the port is published on the machine as it is.
+    let ready = format!(
+        "Ready: http://localhost:{}{}",
+        config.port,
+        config.api_base()
+    );
     let say = |out: &mut dyn Write, event: Event| {
         let _ = writeln!(out, "{}", event.render_text(color));
         let _ = out.flush();
@@ -61,6 +68,8 @@ pub fn supervise(
     let mut watcher = Watcher::new(root);
     let mut app: Option<App> = None;
     let mut generation = 0;
+    // Whether the app started and does not listen yet.
+    let mut starting = false;
     let mut rebuild = Some(format!("Building {name}"));
     loop {
         if stop() {
@@ -91,6 +100,7 @@ pub fn supervise(
                     }
                     generation += 1;
                     app = Some(start(&binary, root, &runs, generation)?);
+                    starting = true;
                 }
                 Built::Failed { errors, lines } => {
                     for line in lines {
@@ -104,6 +114,10 @@ pub fn supervise(
             }
         }
         std::thread::sleep(POLL);
+        if starting && app.is_some() && listens(config.port) {
+            starting = false;
+            say(out, Event::new(Level::Info, ready.as_str()));
+        }
 
         let mut changes = watcher.changes();
         if !changes.is_empty() {
@@ -138,9 +152,16 @@ pub fn supervise(
                 say(out, Event::new(Level::Info, "Starting the app again"));
                 generation += 1;
                 app = Some(start(&binary, root, &runs, generation)?);
+                starting = true;
             }
         }
     }
+}
+
+/// Whether the app accepts connections: a connection alone, which the app does not log.
+fn listens(port: u16) -> bool {
+    let address = (std::net::Ipv4Addr::LOCALHOST, port).into();
+    std::net::TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_ok()
 }
 
 fn start(binary: &Path, root: &Path, runs: &Path, generation: u64) -> Result<App, Failure> {

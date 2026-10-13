@@ -51,6 +51,8 @@ pub struct Context<'a> {
     pub input: &'a mut dyn BufRead,
     /// Where questions and progress go: the terminal, never the result.
     pub output: &'a mut dyn Write,
+    /// Whether what a person reads is colored: questions, and results styled by the command.
+    pub color: bool,
     pub machine: &'a dyn Machine,
 }
 

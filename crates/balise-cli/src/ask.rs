@@ -1,6 +1,12 @@
 //! Questions asked in a terminal: numbered choices, one line per answer, no dependency.
 
 use crate::Context;
+use crate::style::Painter;
+
+/// A question, after a mark that makes it stand out.
+fn question(p: Painter, text: &str) -> String {
+    format!("{} {}", p.accent("?"), p.bold(text))
+}
 
 /// Asks to choose among `options`, each `(value, description)`; an empty answer takes
 /// `default`. Returns the index chosen. At the end of the input, the default.
@@ -10,12 +16,15 @@ pub fn choose(
     options: &[(&str, &str)],
     default: usize,
 ) -> usize {
-    let _ = writeln!(context.output, "\n{question}");
+    let p = Painter(context.color);
+    let _ = writeln!(context.output, "\n{}", self::question(p, question));
     for (i, (value, description)) in options.iter().enumerate() {
-        let _ = writeln!(context.output, "  {}) {value:<12} {description}", i + 1);
+        let number = p.command(&format!("{})", i + 1));
+        let value = p.bold(&format!("{value:<12}"));
+        let _ = writeln!(context.output, "  {number} {value} {}", p.dim(description));
     }
     loop {
-        let _ = write!(context.output, "[{}]: ", default + 1);
+        let _ = write!(context.output, "{} ", p.dim(&format!("[{}]:", default + 1)));
         let _ = context.output.flush();
         let Some(answer) = read_line(context) else {
             return default;
@@ -36,17 +45,32 @@ pub fn choose(
         }
         let _ = writeln!(
             context.output,
-            "Answer with a number from 1 to {}.",
-            options.len()
+            "{}",
+            p.warn(&format!(
+                "Answer with a number from 1 to {}.",
+                options.len()
+            ))
         );
     }
 }
 
 /// Asks a yes-or-no question; an empty answer takes `default`.
 pub fn confirm(context: &mut Context, question: &str, default: bool) -> bool {
-    let hint = if default { "Y/n" } else { "y/N" };
+    let p = Painter(context.color);
+    let hint = if default { "[Y/n]:" } else { "[y/N]:" };
+    // A question after a blank line keeps it.
+    let (mut blank, question) = match question.strip_prefix('\n') {
+        Some(question) => ("\n", question),
+        None => ("", question),
+    };
     loop {
-        let _ = write!(context.output, "{question} [{hint}]: ");
+        let _ = write!(
+            context.output,
+            "{blank}{} {} ",
+            self::question(p, question),
+            p.dim(hint)
+        );
+        blank = "";
         let _ = context.output.flush();
         let Some(answer) = read_line(context) else {
             return default;
@@ -56,7 +80,7 @@ pub fn confirm(context: &mut Context, question: &str, default: bool) -> bool {
             "y" | "yes" => return true,
             "n" | "no" => return false,
             _ => {
-                let _ = writeln!(context.output, "Answer `y` or `n`.");
+                let _ = writeln!(context.output, "{}", p.warn("Answer `y` or `n`."));
             }
         }
     }
@@ -64,7 +88,13 @@ pub fn confirm(context: &mut Context, question: &str, default: bool) -> bool {
 
 /// Asks for a line of text; `None` at the end of the input.
 pub fn line(context: &mut Context, question: &str) -> Option<String> {
-    let _ = write!(context.output, "{question}: ");
+    let p = Painter(context.color);
+    let _ = write!(
+        context.output,
+        "{}{} ",
+        self::question(p, question),
+        p.bold(":")
+    );
     let _ = context.output.flush();
     read_line(context).filter(|answer| !answer.is_empty())
 }
