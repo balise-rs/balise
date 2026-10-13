@@ -7,6 +7,8 @@
 pub mod args;
 mod ask;
 mod commands;
+pub mod dev;
+mod project;
 pub mod style;
 mod template;
 mod tools;
@@ -36,6 +38,7 @@ pub struct Command {
 /// Every command, in the order help lists them.
 pub const COMMANDS: &[&Command] = &[
     &commands::new::COMMAND,
+    &commands::dev::COMMAND,
     &commands::explain::COMMAND,
     &commands::policy::COMMAND,
 ];

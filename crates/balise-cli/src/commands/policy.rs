@@ -1,8 +1,8 @@
 //! `balise policy preset <preset>`: who decides sensitive decisions, chosen by the user.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use balise_core::error_codes::{CLI0004, CLI0009, CLI0010, CLI0012};
+use balise_core::error_codes::{CLI0004, CLI0009, CLI0012};
 use balise_core::json::Value;
 
 use crate::args::Parsed;
@@ -108,16 +108,7 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
             &[("example", &example)],
         ));
     }
-    let root = project_root(&context.cwd).ok_or_else(|| {
-        Failure::problem(
-            CLI0010,
-            &[
-                ("command", "policy preset"),
-                ("path", &context.cwd.display().to_string()),
-            ],
-            &[],
-        )
-    })?;
+    let root = crate::project::require(&context.cwd, "policy preset")?;
     if preset == "full-auto" {
         let _ = writeln!(context.output, "{FULL_AUTO_WARNING}");
         if !ask::confirm(context, "Use full-auto?", false) {
@@ -129,13 +120,6 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
         text: format!("The policy is now {preset}: .balise/policy.toml"),
         data: Value::Object(vec![("preset".into(), Value::String(preset.clone()))]),
     })
-}
-
-/// The project around `dir`: the first folder upwards with `Cargo.toml` and `balise.toml`.
-pub fn project_root(dir: &Path) -> Option<PathBuf> {
-    dir.ancestors()
-        .find(|dir| dir.join("Cargo.toml").is_file() && dir.join("balise.toml").is_file())
-        .map(Path::to_path_buf)
 }
 
 #[cfg(test)]

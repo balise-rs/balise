@@ -35,6 +35,7 @@ macro_rules! codes {
 mod cfg;
 mod cli;
 mod cmp;
+mod dev;
 mod ext;
 mod file;
 mod http;
@@ -45,6 +46,7 @@ mod val;
 pub use cfg::*;
 pub use cli::*;
 pub use cmp::*;
+pub use dev::*;
 pub use ext::*;
 pub use file::*;
 pub use http::*;
@@ -57,6 +59,7 @@ pub const AREAS: &[(&str, &[&ErrorCode])] = &[
     ("CFG", cfg::ALL),
     ("CLI", cli::ALL),
     ("CMP", cmp::ALL),
+    ("DEV", dev::ALL),
     ("EXT", ext::ALL),
     ("FILE", file::ALL),
     ("HTTP", http::ALL),

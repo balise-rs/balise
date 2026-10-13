@@ -39,6 +39,7 @@ A code is an area prefix and four digits.
 | `VAL` | input validation |
 | `FILE` | uploads |
 | `DB` | database and ORM |
+| `DEV` | the dev environment: `balise dev`, its builds, the app it runs |
 | `AUTH` | authentication and permissions |
 | `RT` | realtime (WebSocket, SSE) |
 | `PERF` | performance warnings (N+1, slow query, blocked event loop…) |

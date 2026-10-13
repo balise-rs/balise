@@ -37,6 +37,7 @@ Option A is the one implemented first.
 | 2026-10-12 | Multipart parsing | In-house streaming parser | `multer` | Compile (its dependencies in every project), runtime on large uploads, robustness on malformed bodies | to test |
 | 2026-10-12 | CLI and versions | A launcher running the CLI of the project's version | One CLI supporting a range of Balise versions | Maintenance cost, agents' errors on version mismatches | to test |
 | 2026-10-12 | CLI arguments | Own parser, with codes and suggestions | `clap` | Quality of the help and errors for agents, maintenance | to test |
+| 2026-10-13 | Watching files in dev | Reading file dates every 300 ms | System notifications (`notify`) | Reaction time, CPU on large projects, reliability through Docker mounts on macOS and Windows | to test |
 
 ### Application API
 

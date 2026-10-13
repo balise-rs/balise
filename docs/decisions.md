@@ -180,3 +180,9 @@ Decisions taken while building Balise, with their reason. Most recent last. Opti
 | 2026-10-12 | The launcher is the `balise` binary of the `balise` crate (`cargo install balise`) | No other name to reserve; cargo never builds a dependency's binaries, so projects do not compile it |
 | 2026-10-12 | `balise new` accepts `--no-orm`, `--no-auth`, `--no-mail` and `--minimal` before the modules exist, and refuses what this version cannot generate (`--front react`, `--db`) with `CLI0006` | Refusing a module is already what happens; an option that would be ignored must not be accepted |
 | 2026-10-12 | The template's lockfile is the workspace's, without its local packages, kept equal by a test; `balise new` completes it with `cargo metadata` | Third-party versions are the ones Balise is tested with; Balise's own entries need a published version |
+| 2026-10-13 | `balise new` initializes git without committing | The first commit is the user's call |
+| 2026-10-13 | The CLI colors its output like the logs (codes in bold, `fix:` in green, `code` in cyan) only for a person at a terminal | Agents, `--json` and `NO_COLOR` get plain text, which costs no tokens |
+| 2026-10-13 | The dev supervisor reads file dates every 300 ms rather than using system notifications | Works through Docker mounts on every OS; costs little for a project; `notify` recorded as an alternative |
+| 2026-10-13 | During a build, and after a failed one, the last version that built keeps running; the app runs from a copy of its binary | The front end and the agent keep a working API; the next build can replace the binary on every system |
+| 2026-10-13 | An app that stops on its own is started again, unless it stopped within 2 s of starting | A crash in a request is recovered; a startup error does not loop |
+| 2026-10-13 | `DEV` codes for the dev environment, `CLI` for the command's arguments and versions | Each area keeps one meaning |

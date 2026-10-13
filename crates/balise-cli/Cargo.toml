@@ -13,3 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 balise-core.workspace = true
+
+# Sending SIGTERM to the app and catching Ctrl-C in `balise dev`.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.190"

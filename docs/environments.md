@@ -73,6 +73,8 @@ Practical points:
 - The agent reaches MCP through `balise mcp` on the host, which relays to the dev server in the container. The agent never deals with Docker ([agent-experience.md](agent-experience.md#mcp)).
 - `balise dev --native` skips Docker when Rust is installed on the host.
 - One supervisor, wherever the app runs: inside the container, the `dev` stage runs `balise dev --inside`, the same CLI at the project's version. It watches files, rebuilds, restarts the app, runs Vite and merges every log into one stream. On the host, `balise dev` only starts `docker compose` and relays logs and MCP. `balise dev --native` runs the same supervisor directly on the host.
+- The supervisor reads the files' dates every 300 ms, which works through the mount between the machine and a container, where notifications from the system do not always arrive. A change rebuilds with `--features dev`; while the build runs, or when it fails (`DEV0002`), the last version that built keeps answering. Once built, the app is stopped as an orchestrator stops it (`SIGTERM`, then its graceful shutdown) and started again.
+- An app that stops on its own is reported (`DEV0001`) and started again, unless it stopped right after starting: then the supervisor waits for a change instead of failing in a loop.
 
 ## Test
 
