@@ -3,7 +3,7 @@ members = ["crates/*", "bench/compile-bench", "bench/web-template", "tools/relea
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/balise-rs/balise"
@@ -11,10 +11,10 @@ repository = "https://github.com/balise-rs/balise"
 publish = false
 
 [workspace.dependencies]
-balise = { path = "crates/balise", version = "=0.1.0-alpha.1" }
-balise-core = { path = "crates/balise-core", version = "=0.1.0-alpha.1" }
-balise-macros = { path = "crates/balise-macros", version = "=0.1.0-alpha.1" }
-balise-engine = { path = "crates/balise-engine", version = "=0.1.0-alpha.1" }
+balise = { path = "crates/balise", version = "=0.1.0-alpha.2" }
+balise-core = { path = "crates/balise-core", version = "=0.1.0-alpha.2" }
+balise-macros = { path = "crates/balise-macros", version = "=0.1.0-alpha.2" }
+balise-engine = { path = "crates/balise-engine", version = "=0.1.0-alpha.2" }
 balise-realtime = { path = "crates/balise-realtime" }
 balise-ts = { path = "crates/balise-ts" }
 balise-orm = { path = "crates/balise-orm" }

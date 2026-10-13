@@ -3,7 +3,7 @@
 //! Files ending in `.tpl` are rendered: `{{name}}` takes a value, `{{#if flag}}…{{/if}}` keeps
 //! its content when the flag is set. Other files are copied as they are. Names that would
 //! change how the template is packaged are written differently: `gitignore` is
-//! `.gitignore`, and `Cargo.toml.tpl` and `Cargo.lock.tpl` are not a package of their own.
+//! `.gitignore`, `dockerignore` is `.dockerignore`, and `Cargo.toml.tpl` and `Cargo.lock.tpl` are not a package of their own.
 //!
 //! `Cargo.lock.tpl` pins every third-party crate as Balise is tested; a test keeps it equal
 //! to the workspace's lockfile.
@@ -17,16 +17,26 @@ pub struct Choices<'a> {
     pub name: &'a str,
     /// What `[dependencies]` says for `balise`: `"=0.1.0"` or `{ path = "…" }`.
     pub dependency: &'a str,
+    /// The local checkout of Balise (`--balise-path`): the dev container mounts it and
+    /// builds its CLI from it, instead of installing a published one.
+    pub checkout: Option<&'a str>,
     pub example: bool,
 }
 
 /// Every file of the project, with its path and content.
 pub fn render(choices: &Choices) -> Vec<(String, Vec<u8>)> {
+    let rust = rust_version();
     let values = [
         ("name", choices.name),
         ("balise_dependency", choices.dependency),
+        ("balise_path", choices.checkout.unwrap_or_default()),
+        ("rust", rust),
     ];
-    let flags = [("example", choices.example)];
+    let flags = [
+        ("example", choices.example),
+        ("local", choices.checkout.is_some()),
+        ("published", choices.checkout.is_none()),
+    ];
     files::FILES
         .iter()
         .filter(|(path, _)| choices.example || !path.starts_with("src/orders/"))
@@ -40,11 +50,25 @@ pub fn render(choices: &Choices) -> Vec<(String, Vec<u8>)> {
             };
             let path = match path {
                 "gitignore" => ".gitignore",
+                "dockerignore" => ".dockerignore",
                 path => path,
             };
             (path.to_string(), content)
         })
         .collect()
+}
+
+/// The Rust version `rust-toolchain.toml` pins, which the dev image starts from.
+fn rust_version() -> &'static str {
+    let (_, content) = files::FILES
+        .iter()
+        .find(|(path, _)| *path == "rust-toolchain.toml")
+        .expect("the template pins a toolchain");
+    let text = std::str::from_utf8(content).expect("rust-toolchain.toml is UTF-8");
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix("channel = "))
+        .map(|value| value.trim_matches('"'))
+        .expect("rust-toolchain.toml has a channel")
 }
 
 /// Fills `{{value}}` and keeps or removes `{{#if flag}}…{{/if}}`.
@@ -94,6 +118,7 @@ mod tests {
         let choices = |example| Choices {
             name: "shop",
             dependency: "\"=0.1.0\"",
+            checkout: None,
             example,
         };
         let with: Vec<String> = render(&choices(true)).into_iter().map(|(p, _)| p).collect();
@@ -105,5 +130,34 @@ mod tests {
             .map(|(p, _)| p)
             .collect();
         assert!(!without.iter().any(|p| p.starts_with("src/orders")));
+    }
+
+    #[test]
+    fn the_dev_container_follows_the_choices() {
+        let file = |checkout, name: &str| {
+            let choices = Choices {
+                name: "shop",
+                dependency: "\"=0.1.0\"",
+                checkout,
+                example: false,
+            };
+            let (_, content) = render(&choices)
+                .into_iter()
+                .find(|(path, _)| path == name)
+                .unwrap();
+            String::from_utf8(content).unwrap()
+        };
+        let image = file(None, "Dockerfile");
+        assert!(image.contains(&format!("FROM rust:{}-slim AS dev", rust_version())));
+        assert!(image.contains("cargo install balise-cli --version \"=${BALISE_VERSION}\""));
+        assert!(file(None, "compose.yaml").contains("BALISE_VERSION: ${BALISE_VERSION"));
+        assert!(file(None, ".dockerignore").contains("!rust-toolchain.toml"));
+
+        let image = file(Some("/src/balise"), "Dockerfile");
+        assert!(!image.contains("BALISE_VERSION"));
+        let compose = file(Some("/src/balise"), "compose.yaml");
+        assert!(compose.contains("- /src/balise:/src/balise:ro"));
+        assert!(compose.contains("--path /src/balise/crates/balise-cli"));
+        assert!(!compose.contains("BALISE_VERSION"));
     }
 }

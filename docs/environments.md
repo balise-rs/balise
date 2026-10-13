@@ -60,16 +60,19 @@ The only thing to install is the `balise` launcher, once per machine; it fetches
 
 ## Dev with Docker
 
-`balise new` generates `compose.yaml` and a `Dockerfile`. `balise dev` starts:
+`balise new` generates `compose.yaml`, a `Dockerfile` whose `dev` stage is the dev image, and `rust-toolchain.toml`. `balise dev` starts:
 
-- the application, in the `dev` stage of the project's `Dockerfile` (pinned Rust toolchain, Node for Vite), with reload;
-- the database (PostgreSQL, or a volume for SQLite);
-- the Vite dev server ([web.md](web.md#dev-server-and-vite)).
+- the application, in the `dev` stage (Rust at the version of `rust-toolchain.toml`, the CLI of the project's version), with reload;
+- later, the database (PostgreSQL, or a volume for SQLite) and the Vite dev server ([web.md](web.md#dev-server-and-vite)), with the modules that need them.
 
 Practical points:
 
-- `target/` and the Cargo registry are named volumes. Without them, every restart recompiles everything.
-- On macOS and Windows, files mounted from the host are slow: `target/` stays inside the container.
+- The code is not in the image: the project is mounted at `/app`. The image only holds Rust and the CLI; its build context is `rust-toolchain.toml` alone (`.dockerignore`), and it is rebuilt when the toolchain or Balise's version changes.
+- `target/` and the Cargo registry are named volumes. Without them, every restart recompiles everything; on macOS and Windows, files mounted from the host are slow, and `target/` stays inside the container. `balise dev stop` keeps them.
+- `compose.yaml` holds no setting of its own. `balise dev` reads the port and `shutdown.timeout` from `balise.toml` and gives them to compose as variables: the port is published on `127.0.0.1` only, and `stop_grace_period` is `shutdown.timeout` plus 5 s. Run `docker compose` by hand and it stops, asking for `balise dev`. The container's environment does not inherit the machine's variables: only the files count.
+- The container runs as the user of the machine, so that what the app writes in the project belongs to them.
+- `balise dev` relays the container's logs until Ctrl-C, which stops the app cleanly; a second Ctrl-C kills it. `--detach` runs it in the background: `balise dev status` says whether the app answers, `balise dev stop` stops it. Before starting, `balise dev` checks that Docker is installed (`DEV0004`) and running (`DEV0005`), and that the port is free (`DEV0006`).
+- With `balise new --balise-path`, to work on Balise itself, the container mounts the local checkout at the same path and builds its CLI from it at each start, instead of installing a published one.
 - The agent reaches MCP through `balise mcp` on the host, which relays to the dev server in the container. The agent never deals with Docker ([agent-experience.md](agent-experience.md#mcp)).
 - `balise dev --native` skips Docker when Rust is installed on the host.
 - One supervisor, wherever the app runs: inside the container, the `dev` stage runs `balise dev --inside`, the same CLI at the project's version. It watches files, rebuilds, restarts the app, runs Vite and merges every log into one stream. On the host, `balise dev` only starts `docker compose` and relays logs and MCP. `balise dev --native` runs the same supervisor directly on the host.

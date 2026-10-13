@@ -93,8 +93,8 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
             return Ok(crate::text("Nothing was created.".into()));
         }
     }
-    let dependency = dependency(parsed.value("--balise-path"));
-    write_files(&root, &plan, &dependency)?;
+    let source = source(parsed.value("--balise-path"));
+    write_files(&root, &plan, &source)?;
     policy::write(&root, &plan.policy)?;
     let mut notes = Vec::new();
     // The lockfile pins third-party crates; cargo adds Balise's own and drops what is unused.
@@ -286,27 +286,41 @@ fn check_name(name: &str) -> Result<(), Failure> {
     }
 }
 
-/// What `[dependencies]` says for Balise: this version, or a local checkout.
-fn dependency(path: Option<&str>) -> String {
-    match path {
-        None => format!("\"={VERSION}\""),
-        Some(path) => {
-            let path = PathBuf::from(path);
-            let path = std::fs::canonicalize(&path).unwrap_or(path);
-            let facade = match path.join("crates/balise/Cargo.toml").is_file() {
-                true => path.join("crates/balise"),
-                false => path,
-            };
-            let text = facade.display().to_string().replace('\\', "/");
-            format!("{{ path = \"{text}\" }}")
-        }
+/// Where Balise comes from: this version, or a local checkout given as its root or as the
+/// facade's folder.
+struct Source {
+    /// What `[dependencies]` says for Balise.
+    dependency: String,
+    /// The checkout's root.
+    checkout: Option<String>,
+}
+
+fn source(path: Option<&str>) -> Source {
+    let Some(path) = path else {
+        return Source {
+            dependency: format!("\"={VERSION}\""),
+            checkout: None,
+        };
+    };
+    let path = PathBuf::from(path);
+    let path = std::fs::canonicalize(&path).unwrap_or(path);
+    let (checkout, facade) = match path.join("crates/balise/Cargo.toml").is_file() {
+        true => (path.clone(), path.join("crates/balise")),
+        false => (path.join("../.."), path),
+    };
+    let checkout = std::fs::canonicalize(&checkout).unwrap_or(checkout);
+    let text = |path: &Path| path.display().to_string().replace('\\', "/");
+    Source {
+        dependency: format!("{{ path = \"{}\" }}", text(&facade)),
+        checkout: Some(text(&checkout)),
     }
 }
 
-fn write_files(root: &Path, plan: &Plan, dependency: &str) -> Result<(), Failure> {
+fn write_files(root: &Path, plan: &Plan, source: &Source) -> Result<(), Failure> {
     let choices = Choices {
         name: &plan.name,
-        dependency,
+        dependency: &source.dependency,
+        checkout: source.checkout.as_deref(),
         example: plan.example,
     };
     for (path, content) in template::render(&choices) {

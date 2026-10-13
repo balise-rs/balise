@@ -34,4 +34,50 @@ still work. The errors are shown in short form; `balise check` explains them in 
 Without `--native`, `balise dev` builds in Docker, and Rust is not needed on the machine.
 "#,
     }
+    DEV0004 {
+        title: "Docker is not installed",
+        message: "`balise dev` runs the app in Docker, and Docker is not installed",
+        fix: "Install Docker (https://docs.docker.com/get-docker/), or run `balise dev --native` to build with the Rust of this machine.",
+        explanation: r#"
+`balise dev` builds and runs the app in a container, with the Rust toolchain pinned by
+`rust-toolchain.toml` and the Balise CLI of the project's version: nothing else to install,
+and the same environment on every machine.
+
+`balise dev --native` runs the same supervisor on this machine instead, with its own Rust.
+"#,
+    }
+    DEV0005 {
+        title: "Docker is not running",
+        message: "Docker is installed but does not answer",
+        fix: "Start Docker (Docker Desktop, or `sudo systemctl start docker` on Linux), then run `balise dev` again.",
+        explanation: r#"
+`balise dev` asked the Docker daemon for its state and got no answer within a few seconds.
+The daemon is stopped, still starting, or this user cannot reach it (on Linux, the user
+must be in the `docker` group).
+"#,
+    }
+    DEV0006 {
+        title: "The port is taken",
+        message: "Port {port} is already used by another program",
+        fix: "Stop the program that uses it, or set another port in `balise.toml`: `port = {other}`.",
+        explanation: r#"
+The app listens on the port of `balise.toml` (`port`, or the `PORT` variable), and Docker
+publishes it on the machine. Another program already listens on it: often another app in
+dev, or a `balise dev --native` still running.
+
+    [env.dev]
+    port = 3001
+"#,
+    }
+    DEV0007 {
+        title: "Docker failed",
+        message: "`docker compose {command}` failed: {cause}",
+        fix: "Read Docker's output above. `compose.yaml` and `Dockerfile` come from `balise new`: compare them with a new project's if they were changed.",
+        explanation: r#"
+`balise dev` runs `docker compose` with the project's `compose.yaml`, which builds the
+`Dockerfile`'s image (Rust, and the Balise CLI of the project's version) and starts the
+container. Building the image the first time downloads Rust and compiles the CLI: it needs
+the network.
+"#,
+    }
 }

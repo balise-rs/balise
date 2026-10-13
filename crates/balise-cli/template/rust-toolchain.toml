@@ -1,0 +1,5 @@
+# The Rust version of this project, the same on every machine and in the container of
+# `balise dev`. Balise is tested with it.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]

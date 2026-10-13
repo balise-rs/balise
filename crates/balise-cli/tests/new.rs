@@ -39,6 +39,16 @@ impl Machine for Fake {
             false => Err(String::from_utf8_lossy(&output.stderr).into_owned()),
         }
     }
+
+    fn output(
+        &self,
+        _: &str,
+        _: &[&str],
+        _: &Path,
+        _: &[(String, String)],
+    ) -> Result<String, String> {
+        Ok(String::new())
+    }
 }
 
 fn workspace() -> PathBuf {

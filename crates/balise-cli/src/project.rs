@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+use balise_core::config::load::{self, Files, Mode};
+use balise_core::config::{Config, Environment};
 use balise_core::error_codes::CLI0010;
 
 use crate::Failure;
@@ -44,5 +46,25 @@ pub fn target_dir(root: &Path) -> PathBuf {
     match std::env::var_os("CARGO_TARGET_DIR") {
         Some(dir) => root.join(dir),
         None => root.join("target"),
+    }
+}
+
+/// The project's dev configuration, read as the app reads it with these environment
+/// variables. Balise's defaults when it cannot be read: the app reports why when it starts.
+pub fn config(root: &Path, variables: &[(String, String)]) -> Config {
+    let read = |name: &str| -> &'static str {
+        let text = std::fs::read_to_string(root.join(name)).unwrap_or_default();
+        Box::leak(text.into_boxed_str())
+    };
+    let files = Files {
+        config: read("balise.toml"),
+        budgets: read("budgets.toml"),
+        crate_name: "app",
+        root: "",
+    };
+    let dev = Environment::Dev;
+    match load::load(&files, dev, dev, variables, Mode::Start) {
+        Ok(loaded) => loaded.config,
+        Err(_) => Config::defaults(dev),
     }
 }

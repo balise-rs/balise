@@ -12,9 +12,12 @@ fn paint(text: &str, style: &str) -> String {
     format!("\x1b[{style}m{text}\x1b[0m")
 }
 
-/// Whether to color what goes to standard output or standard error.
+/// Whether to color what goes to standard output or standard error: a terminal, or
+/// `CLICOLOR_FORCE`, which `balise dev` sets for the supervisor in its container when the
+/// terminal on the machine wants colors.
 pub fn wanted(terminal: bool) -> bool {
-    terminal && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
+    let set = |name| std::env::var_os(name).is_some_and(|value| !value.is_empty());
+    (terminal || set("CLICOLOR_FORCE")) && !set("NO_COLOR")
 }
 
 /// `error` as the first word of a failure.

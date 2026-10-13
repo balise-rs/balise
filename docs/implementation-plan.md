@@ -78,15 +78,12 @@ Done !
 Done !
 
 ### 4.2b `balise dev` in Docker
-Generate `compose.yaml` and the dev `Dockerfile` (pinned toolchain through `rust-toolchain.toml`, the CLI at the project's version passed as a build argument, named volumes for `target/` and the registry). `balise dev` builds the image, starts the container (`balise dev --inside`) and follows its logs; `--detach`, `balise dev status`, `balise dev stop`; clear `DEV` errors when Docker is missing, stopped, or the port is taken.
-- More: [environments.md](environments.md#dev-with-docker)
-- Also: `stop_grace_period` derived from `shutdown.timeout`, with a margin ([engine.md](engine.md#shutdown)); the database and Vite come with the ORM and the front end
+Done !
 
 ### 4.3 `balise check`
 Wrap `cargo check`, enrich diagnostics, apply the project lints, check schema drift and the generated client. Rank output: errors, new warnings, one summary line.
 - More: [errors-and-logs.md](errors-and-logs.md#compile-time-errors)
 - Also: two levels (incremental after each edit, full at the end of a task) and `--ci` with the release build ([agent-experience.md](agent-experience.md#hooks))
-- Also: report a `compose.yaml` whose `stop_grace_period` is not longer than `shutdown.timeout`
 
 ### 4.4 `routes`, `why`, `trace`, `explain`
 Implement the debugging commands, answered by the project's dev build as subcommands of the app's binary (`./app routes`, `./app why …`) so versions always match. Each one is also an MCP tool later, from the same command registry.

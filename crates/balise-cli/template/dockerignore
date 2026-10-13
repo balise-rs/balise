@@ -1,0 +1,3 @@
+# The image only needs rust-toolchain.toml: the code is mounted when the container runs.
+*
+!rust-toolchain.toml

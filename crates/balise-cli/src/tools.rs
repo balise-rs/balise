@@ -15,6 +15,14 @@ pub trait Machine {
     fn os(&self) -> String;
     /// Runs a program in `dir`, its output hidden; `Err` holds what it printed on error.
     fn run(&self, program: &str, args: &[&str], dir: &Path) -> Result<(), String>;
+    /// Runs a program in `dir` with more environment variables, and returns what it printed.
+    fn output(
+        &self,
+        program: &str,
+        args: &[&str],
+        dir: &Path,
+        variables: &[(String, String)],
+    ) -> Result<String, String>;
 }
 
 /// The real machine.
@@ -69,6 +77,25 @@ impl Machine for System {
             .map_err(|error| error.to_string())?;
         match output.status.success() {
             true => Ok(()),
+            false => Err(String::from_utf8_lossy(&output.stderr).trim().to_string()),
+        }
+    }
+
+    fn output(
+        &self,
+        program: &str,
+        args: &[&str],
+        dir: &Path,
+        variables: &[(String, String)],
+    ) -> Result<String, String> {
+        let output = Command::new(program)
+            .args(args)
+            .current_dir(dir)
+            .envs(variables.iter().map(|(name, value)| (name, value)))
+            .output()
+            .map_err(|error| error.to_string())?;
+        match output.status.success() {
+            true => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
             false => Err(String::from_utf8_lossy(&output.stderr).trim().to_string()),
         }
     }

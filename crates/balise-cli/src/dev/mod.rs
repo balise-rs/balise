@@ -4,6 +4,7 @@
 
 mod app;
 mod build;
+pub mod docker;
 mod signal;
 mod watch;
 
@@ -11,7 +12,6 @@ use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use balise_core::config::{Config, Environment};
 use balise_core::error_codes::{DEV0001, DEV0002};
 use balise_core::event::{Event, Level};
 
@@ -33,6 +33,9 @@ const SETTLE: Duration = Duration::from_millis(150);
 /// for a change instead of starting it again.
 const STARTUP: Duration = Duration::from_secs(2);
 
+/// How much longer than `shutdown.timeout` the app is given to stop before it is killed.
+pub const GRACE_MARGIN: Duration = Duration::from_secs(2);
+
 /// Runs the supervisor of the project at `root` until `stop` says so.
 pub fn supervise(
     root: &Path,
@@ -46,8 +49,10 @@ pub fn supervise(
         .join("debug")
         .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     let runs = target.join("balise-dev");
-    // The app gets the time its own shutdown takes, and a little more.
-    let grace = Config::defaults(Environment::Dev).shutdown_timeout + Duration::from_secs(2);
+    // The app gets the time its own shutdown takes, and a little more. The app inherits
+    // this process's variables: the configuration is read with them.
+    let variables: Vec<(String, String)> = std::env::vars().collect();
+    let grace = project::config(root, &variables).shutdown_timeout + GRACE_MARGIN;
     let say = |out: &mut dyn Write, event: Event| {
         let _ = writeln!(out, "{}", event.render_text(color));
         let _ = out.flush();

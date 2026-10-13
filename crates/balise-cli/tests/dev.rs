@@ -1,5 +1,6 @@
 //! `balise dev --native` on a generated project: it builds, restarts on change, keeps the
 //! last version running while the code does not compile, and stops the app with itself.
+//! `balise dev` in Docker: what it checks before starting the container.
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -10,14 +11,17 @@ use std::time::{Duration, Instant};
 
 use balise_cli::{Context, Machine, run};
 
-struct Quiet;
+/// A machine with Docker as the test says, and no container running.
+struct Quiet {
+    docker: Option<bool>,
+}
 
 impl Machine for Quiet {
-    fn installed(&self, _: &str) -> bool {
-        false
+    fn installed(&self, program: &str) -> bool {
+        program == "docker" && self.docker.is_some()
     }
     fn docker_running(&self) -> bool {
-        false
+        self.docker == Some(true)
     }
     fn os(&self) -> String {
         "Linux".into()
@@ -32,6 +36,15 @@ impl Machine for Quiet {
             true => Ok(()),
             false => Err(String::from_utf8_lossy(&output.stderr).into_owned()),
         }
+    }
+    fn output(
+        &self,
+        _: &str,
+        _: &[&str],
+        _: &Path,
+        _: &[(String, String)],
+    ) -> Result<String, String> {
+        Ok(String::new())
     }
 }
 
@@ -83,32 +96,104 @@ fn hello(text: &str) -> String {
     )
 }
 
-#[test]
-fn the_supervisor_rebuilds_and_keeps_the_last_version_running() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+fn workspace() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
-        .unwrap();
-    let cwd = std::env::temp_dir().join("balise-dev-tests");
-    let _ = std::fs::remove_dir_all(&cwd);
-    std::fs::create_dir_all(&cwd).unwrap();
-    let args: Vec<String> = ["new", "app", "--no-front", "--no-example", "--balise-path"]
-        .iter()
-        .map(|a| a.to_string())
-        .chain([workspace.display().to_string()])
-        .collect();
+        .unwrap()
+}
+
+/// Runs `balise <args>` in `cwd`, without a terminal.
+fn balise(cwd: &Path, args: &[&str], machine: &Quiet) -> (String, u8) {
+    let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
     let mut input: &[u8] = b"";
     let mut asked = Vec::new();
     let mut context = Context {
-        cwd: cwd.clone(),
+        cwd: cwd.to_path_buf(),
         interactive: false,
         input: &mut input,
         output: &mut asked,
-        machine: &Quiet,
+        machine,
     };
-    let (out, code) = run(&args, &mut context);
+    run(&args, &mut context)
+}
+
+/// A new project without the example, in a fresh folder named after the test.
+fn project(test: &str) -> PathBuf {
+    let cwd = std::env::temp_dir().join("balise-dev-tests").join(test);
+    let _ = std::fs::remove_dir_all(&cwd);
+    std::fs::create_dir_all(&cwd).unwrap();
+    let workspace = workspace();
+    let args = [
+        "new",
+        "app",
+        "--no-front",
+        "--no-example",
+        "--balise-path",
+        workspace.to_str().unwrap(),
+    ];
+    let (out, code) = balise(&cwd, &args, &Quiet { docker: None });
     assert_eq!(code, 0, "{out}");
-    let root: PathBuf = cwd.join("app");
+    cwd.join("app")
+}
+
+#[test]
+fn docker_must_be_installed_and_running() {
+    let root = project("docker");
+    let (out, code) = balise(&root, &["dev"], &Quiet { docker: None });
+    assert_eq!(code, 1);
+    assert!(out.starts_with("DEV0004: "), "{out}");
+    let (out, code) = balise(
+        &root,
+        &["dev", "status"],
+        &Quiet {
+            docker: Some(false),
+        },
+    );
+    assert_eq!(code, 1);
+    assert!(out.starts_with("DEV0005: "), "{out}");
+}
+
+#[test]
+fn a_taken_port_is_reported_before_docker_starts() {
+    let root = project("port");
+    let taken = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port();
+    let config = std::fs::read_to_string(root.join("balise.toml")).unwrap();
+    std::fs::write(root.join("balise.toml"), format!("port = {port}\n{config}")).unwrap();
+    let (out, code) = balise(&root, &["dev"], &Quiet { docker: Some(true) });
+    assert_eq!(code, 1);
+    let expected = format!(
+        "DEV0006: Port {port} is already used by another program\n  fix: Stop the program that uses it, or set another port in `balise.toml`: `port = {}`.",
+        port + 1
+    );
+    assert!(out.starts_with(&expected), "{out}");
+}
+
+#[test]
+fn actions_and_options_are_checked() {
+    let root = project("usage");
+    let docker = Quiet { docker: Some(true) };
+    let (out, code) = balise(&root, &["dev", "restart"], &docker);
+    assert_eq!(code, 2);
+    assert!(
+        out.starts_with("CLI0004: `restart` is not a valid value for `dev`"),
+        "{out}"
+    );
+    let (out, code) = balise(&root, &["dev", "stop", "--native"], &docker);
+    assert_eq!(code, 2);
+    assert!(
+        out.starts_with("CLI0005: `stop` and `--native` cannot be used together"),
+        "{out}"
+    );
+    let (out, code) = balise(&root, &["dev", "--native", "--detach"], &docker);
+    assert_eq!(code, 2, "{out}");
+}
+
+#[test]
+fn the_supervisor_rebuilds_and_keeps_the_last_version_running() {
+    let workspace = workspace();
+    let root = project("supervisor");
     std::fs::write(
         root.join("src/main.rs"),
         "mod hello;\n\nfn main() {\n    balise::run!();\n}\n",
