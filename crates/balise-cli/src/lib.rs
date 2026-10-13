@@ -7,6 +7,7 @@
 pub mod args;
 mod ask;
 mod commands;
+pub mod style;
 mod template;
 mod tools;
 

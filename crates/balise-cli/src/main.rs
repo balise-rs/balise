@@ -1,10 +1,10 @@
 //! The Balise CLI of one version. Users run it through `balise`, which picks the version of
 //! their project.
 
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
-use balise_cli::{Context, System, person_at_terminal, run};
+use balise_cli::{Context, System, person_at_terminal, run, style};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -23,9 +23,17 @@ fn main() -> ExitCode {
     // A result goes to standard output, as JSON for programs; an error otherwise goes to
     // standard error.
     match (code, json) {
-        (0, _) | (_, true) => println!("{out}"),
+        (_, true) => println!("{out}"),
+        (0, false) => match style::wanted(std::io::stdout().is_terminal()) {
+            true => println!("{}", style::colorize(&out)),
+            false => println!("{out}"),
+        },
         _ => {
-            let _ = writeln!(std::io::stderr(), "error {out}");
+            let (label, out) = match style::wanted(std::io::stderr().is_terminal()) {
+                true => (style::error_label(), style::colorize(&out)),
+                false => ("error".to_string(), out),
+            };
+            let _ = writeln!(std::io::stderr(), "{label} {out}");
         }
     }
     ExitCode::from(code)
