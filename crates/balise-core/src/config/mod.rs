@@ -164,6 +164,17 @@ pub struct Setting {
     pub also: &'static [&'static str],
     /// Sets the value, or says it is not valid.
     pub apply: fn(&mut Config, &load::Raw) -> bool,
+    /// The value in a configuration, as `balise.toml` writes it; `None` when unset.
+    pub value: fn(&Config) -> Option<String>,
+}
+
+/// A duration as `balise.toml` writes it: `30s`, `500ms`.
+fn toml_duration(duration: Duration) -> String {
+    let millis = duration.as_millis();
+    match millis.is_multiple_of(1000) {
+        true => format!("{}s", millis / 1000),
+        false => format!("{millis}ms"),
+    }
 }
 
 /// The settings of the core. Modules add theirs.
@@ -180,6 +191,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(config.host.clone()),
     },
     Setting {
         key: "port",
@@ -193,6 +205,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(config.port.to_string()),
     },
     Setting {
         key: "api.prefix",
@@ -206,6 +219,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(config.api.prefix.clone()),
     },
     Setting {
         key: "api.version",
@@ -219,6 +233,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| config.api.version.map(|v| v.to_string()),
     },
     Setting {
         key: "limits.body_size",
@@ -232,6 +247,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(crate::text::format_size(config.body_size).replace(' ', "")),
     },
     Setting {
         key: "limits.timeout",
@@ -245,6 +261,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(toml_duration(config.timeout)),
     },
     Setting {
         key: "shutdown.timeout",
@@ -258,6 +275,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(toml_duration(config.shutdown_timeout)),
     },
     Setting {
         key: "storage.dir",
@@ -271,6 +289,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(config.storage_dir.clone()),
     },
     Setting {
         key: "pagination.per_page",
@@ -284,6 +303,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(config.pagination.per_page.to_string()),
     },
     Setting {
         key: "pagination.max_per_page",
@@ -297,6 +317,7 @@ pub const SETTINGS: &[Setting] = &[
             }
             _ => false,
         },
+        value: |config| Some(config.pagination.max_per_page.to_string()),
     },
     Setting {
         key: "log.format",
@@ -310,6 +331,15 @@ pub const SETTINGS: &[Setting] = &[
                 _ => return false,
             };
             true
+        },
+        value: |config| {
+            Some(
+                match config.log_format {
+                    Format::Text => "text",
+                    Format::Json => "json",
+                }
+                .to_string(),
+            )
         },
     },
     Setting {
@@ -328,6 +358,7 @@ pub const SETTINGS: &[Setting] = &[
             };
             true
         },
+        value: |config| Some(config.log_level.name().to_string()),
     },
 ];
 
@@ -343,6 +374,27 @@ mod tests {
         assert_eq!(config.api_base(), "/api/v2");
         config.api.prefix = "/backend/".to_string();
         assert_eq!(config.api_base(), "/backend/v2");
+    }
+
+    #[test]
+    fn each_setting_reads_back_what_it_applies() {
+        let config = Config::defaults(Environment::Dev);
+        for setting in SETTINGS {
+            let Some(value) = (setting.value)(&config) else {
+                continue;
+            };
+            let raw = match value.parse::<i64>() {
+                Ok(n) => load::Raw::Integer(n),
+                Err(_) => load::Raw::Text(value.clone()),
+            };
+            let mut applied = Config::defaults(Environment::Prod);
+            assert!(
+                (setting.apply)(&mut applied, &raw),
+                "{}: {value}",
+                setting.key
+            );
+            assert_eq!((setting.value)(&applied), Some(value), "{}", setting.key);
+        }
     }
 
     #[test]

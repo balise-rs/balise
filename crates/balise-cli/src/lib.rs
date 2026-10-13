@@ -4,15 +4,18 @@
 //! data without printing anything. The terminal shows the data as compact text, `--json` as
 //! JSON; the MCP server will serve the same commands as tools.
 
+mod app;
 pub mod args;
 mod ask;
 pub mod check;
 mod commands;
 pub mod dev;
+mod journal;
 mod project;
 pub mod style;
 mod template;
 mod tools;
+mod value;
 
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::PathBuf;
@@ -41,6 +44,11 @@ pub const COMMANDS: &[&Command] = &[
     &commands::new::COMMAND,
     &commands::dev::COMMAND,
     &commands::check::COMMAND,
+    &commands::routes::COMMAND,
+    &commands::why::COMMAND,
+    &commands::logs::COMMAND,
+    &commands::trace::COMMAND,
+    &commands::config::COMMAND,
     &commands::explain::COMMAND,
     &commands::policy::COMMAND,
 ];

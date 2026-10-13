@@ -8,7 +8,7 @@ use crate::{Command, Context, Failure, Report, missing};
 
 pub const COMMAND: Command = Command {
     name: "explain",
-    summary: "Explain an error code, Balise's (`HTTP0003`) or Rust's (`E0308`): why it happens and how to fix it.",
+    summary: "Explain an error code, Balise's (`HTTP0003`) or Rust's (`E0308`): why it happens and how to fix it. `balise explain config` lists every setting.",
     arguments: "<CODE>",
     options: &[],
     exclusive: &[],
@@ -23,6 +23,9 @@ fn run(parsed: &Parsed, _: &mut Context) -> Result<Report, Failure> {
             "balise explain HTTP0003",
         ));
     };
+    if code.eq_ignore_ascii_case("config") {
+        return Ok(config());
+    }
     let code = code.to_ascii_uppercase();
     if crate::check::is_rustc_code(&code) {
         return rustc(&code);
@@ -91,4 +94,65 @@ fn rustc(code: &str) -> Result<Report, Failure> {
         text,
         exit: 0,
     })
+}
+
+/// `balise explain config`: every setting, its default in each environment, and its
+/// variables.
+fn config() -> Report {
+    use balise_core::config::load::variable_name;
+    use balise_core::config::{Config, Environment, SETTINGS};
+
+    let environments = [Environment::Dev, Environment::Test, Environment::Prod];
+    let mut lines = vec![
+        "Settings of `balise.toml`, at the top for every environment or in `[env.dev]`, `[env.test]`, `[env.prod]`. Each one can also come from its variable, which wins.".to_string(),
+        String::new(),
+    ];
+    let mut data = Vec::new();
+    for setting in SETTINGS {
+        // As `balise.toml` writes it: text in quotes.
+        let toml = |value: Option<String>| match value {
+            None => "(not set)".to_string(),
+            Some(value) if value.parse::<i64>().is_ok() => value,
+            Some(value) => format!("\"{value}\""),
+        };
+        // Environments with the same default together: `"text" in dev, "json" in test, prod`.
+        let mut groups: Vec<(String, Vec<&str>)> = Vec::new();
+        for env in environments {
+            let value = toml((setting.value)(&Config::defaults(env)));
+            match groups.iter_mut().find(|(v, _)| *v == value) {
+                Some((_, names)) => names.push(env.name()),
+                None => groups.push((value, vec![env.name()])),
+            }
+        }
+        let default = match groups.as_slice() {
+            [(value, _)] => value.clone(),
+            groups => groups
+                .iter()
+                .map(|(value, names)| format!("{value} in {}", names.join(", ")))
+                .collect::<Vec<_>>()
+                .join("; "),
+        };
+        let mut variables = vec![variable_name(setting.key)];
+        variables.extend(setting.also.iter().map(|name| name.to_string()));
+        lines.push(format!("{} = {default}", setting.key));
+        lines.push(format!(
+            "  {}; variable {}",
+            setting.expected,
+            variables.join(" or ")
+        ));
+        data.push(Value::Object(vec![
+            ("default".into(), Value::String(default)),
+            ("expected".into(), Value::String(setting.expected.into())),
+            ("key".into(), Value::String(setting.key.into())),
+            (
+                "variables".into(),
+                Value::Array(variables.into_iter().map(Value::String).collect()),
+            ),
+        ]));
+    }
+    Report {
+        text: lines.join("\n"),
+        data: Value::Array(data),
+        exit: 0,
+    }
 }

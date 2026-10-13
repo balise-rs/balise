@@ -238,6 +238,45 @@ fn the_supervisor_rebuilds_and_keeps_the_last_version_running() {
         logs.text().contains(&ready)
     });
 
+    // The journal has the supervisor's events and the app's, with what routing decided.
+    let missed = get(port, "/api/nope").unwrap();
+    let id = missed
+        .split("\"request_id\":\"")
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap();
+    get(port, "/api/hello").unwrap();
+    let quiet = Quiet { docker: None };
+    let (out, _) = balise(&root, &["logs", "--limit", "3"], &quiet);
+    assert!(out.contains("Ready: http://localhost:"), "{out}");
+    assert!(out.contains("GET /api/nope → request"), "{out}");
+    assert!(
+        out.contains("HTTP0003  No route for GET /api/nope"),
+        "{out}"
+    );
+    let (out, _) = balise(&root, &["logs", "--code", "HTTP0003"], &quiet);
+    assert!(out.ends_with("1 events."), "{out}");
+    let (out, _) = balise(&root, &["trace", id], &quiet);
+    assert!(
+        out.starts_with("No route matched this request: `balise why GET /api/nope` says why."),
+        "{out}"
+    );
+    let (out, _) = balise(&root, &["logs", "--json", "--limit", "1"], &quiet);
+    let hello_id = out
+        .split("\"request_id\":\"")
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap();
+    let (out, _) = balise(&root, &["trace", hello_id], &quiet);
+    assert!(
+        out.starts_with("GET /api/hello → hello::hello (src/hello.rs:"),
+        "{out}"
+    );
+
     std::fs::write(root.join("src/hello.rs"), hello("v2")).unwrap();
     wait(Duration::from_secs(120), "rebuild", &logs, answers("v2"));
     assert!(

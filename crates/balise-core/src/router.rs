@@ -20,6 +20,7 @@ pub const HEALTH_PATHS: [&str; 2] = ["/health", "/ready"];
 pub struct Router {
     base: String,
     root: Node,
+    routes: &'static [Route],
 }
 
 #[derive(Debug, Default)]
@@ -80,6 +81,7 @@ impl Router {
         Ok(Router {
             base: base.to_string(),
             root,
+            routes,
         })
     }
 
@@ -121,6 +123,138 @@ impl Router {
         allowed.sort();
         allowed.dedup();
         Match::MethodNotAllowed { allowed }
+    }
+}
+
+/// Why a request reaches a route or not, for `balise why`.
+#[derive(Debug)]
+pub enum Why {
+    Found {
+        route: &'static Route,
+        params: Vec<(String, String)>,
+    },
+    MethodNotAllowed {
+        allowed: Vec<Method>,
+    },
+    NotFound {
+        /// A path that would work, when the mistake is a known one: the API base forgotten,
+        /// a trailing `/`.
+        instead: Option<(String, String)>,
+        /// The routes that almost match, with what differs.
+        near: Vec<Near>,
+    },
+}
+
+/// A path of routes that almost matches a request's.
+#[derive(Debug)]
+pub struct Near {
+    /// The routes of this path, one per method.
+    pub routes: Vec<&'static Route>,
+    /// The full path: `/api/orders/{id}`.
+    pub path: String,
+    pub reason: String,
+}
+
+impl Router {
+    /// The API base: `/api`.
+    pub fn base(&self) -> &str {
+        &self.base
+    }
+
+    /// What [`find`](Self::find) answers for a request, and why.
+    pub fn why(&self, method: Option<Method>, full_path: &str) -> Why {
+        match self.find(method, full_path) {
+            Match::Found { route, params, .. } => return Why::Found { route, params },
+            Match::MethodNotAllowed { allowed } => return Why::MethodNotAllowed { allowed },
+            Match::NotFound => {}
+        }
+        let works = |path: &str| !matches!(self.find(method, path), Match::NotFound);
+        let instead = if !self.base.is_empty() && !full_path.starts_with(&self.base) {
+            let path = format!("{}{full_path}", self.base);
+            works(&path).then(|| {
+                let reason = format!("every route is under `{}`", self.base);
+                (path, reason)
+            })
+        } else if full_path.len() > 1 && full_path.ends_with('/') {
+            let path = full_path.trim_end_matches('/').to_string();
+            works(&path).then(|| (path, "routes have no trailing `/`".to_string()))
+        } else {
+            None
+        };
+        let path = match full_path.starts_with(&self.base) {
+            true => full_path.to_string(),
+            false => format!("{}{full_path}", self.base),
+        };
+        let parts: Vec<&str> = segments(&path).collect();
+        let mut near: Vec<(usize, usize, Near)> = self
+            .routes
+            .iter()
+            .filter_map(|route| {
+                let full = format!("{}{}", self.base, route.path);
+                let expected: Vec<&str> = segments(&full).collect();
+                let same = expected
+                    .iter()
+                    .zip(&parts)
+                    .take_while(|(e, p)| *e == *p || (is_param(e) && !p.is_empty()))
+                    .count();
+                // Only routes that share more than the base, or whose next segment is a typo
+                // away: `ordres` for `orders`.
+                let base_segments = segments(&self.base).count();
+                let typo = match (expected.get(same), parts.get(same)) {
+                    (Some(e), Some(p)) => !is_param(e) && crate::text::closest(p, &[e]).is_some(),
+                    _ => false,
+                };
+                if same <= base_segments && !typo {
+                    return None;
+                }
+                let reason = match (expected.get(same), parts.get(same)) {
+                    (Some(e), Some(p)) => format!("`{p}` is not `{e}`"),
+                    (Some(_), None) => {
+                        let more = expected.len() - parts.len();
+                        format!("it has {} more", plural(more, "segment"))
+                    }
+                    (None, Some(_)) => {
+                        let fewer = parts.len() - expected.len();
+                        format!("it ends {} earlier", plural(fewer, "segment"))
+                    }
+                    (None, None) => return None,
+                };
+                let distance = expected.len().abs_diff(parts.len());
+                let near = Near {
+                    routes: vec![route],
+                    path: full,
+                    reason,
+                };
+                Some((same, distance, near))
+            })
+            .collect();
+        near.sort_by(|a, b| (b.0, a.1, &a.2.path).cmp(&(a.0, b.1, &b.2.path)));
+        // One entry per path; none when a known mistake explains it all.
+        let mut paths: Vec<Near> = Vec::new();
+        for (_, _, near) in near {
+            match paths.iter_mut().find(|other| other.path == near.path) {
+                Some(other) => other.routes.extend(near.routes),
+                None => paths.push(near),
+            }
+        }
+        for near in &mut paths {
+            near.routes.sort_by_key(|route| route.method);
+        }
+        paths.truncate(3);
+        if instead.is_some() {
+            paths.clear();
+        }
+        Why::NotFound {
+            instead,
+            near: paths,
+        }
+    }
+}
+
+fn plural(count: usize, word: &str) -> String {
+    match count {
+        1 => format!("one {word}"),
+        _ => format!("{count} {word}s"),
     }
 }
 
@@ -291,6 +425,59 @@ mod tests {
         let router = Router::build(routes![Get "/" "home"], "/api/v1").unwrap();
         assert_eq!(found(&router, Method::Get, "/api/v1").0, "orders::home");
         assert_eq!(found(&router, Method::Get, "/api/v1/").0, "orders::home");
+    }
+
+    #[test]
+    fn why_names_the_routes_that_almost_match() {
+        let router = Router::build(
+            routes![Get "/orders" "list", Get "/orders/{id}" "get", Get "/orders/{id}/lines" "lines", Post "/orders" "create"],
+            "/api",
+        )
+        .unwrap();
+        assert!(matches!(
+            router.why(Some(Method::Get), "/api/orders/7"),
+            Why::Found { route, params } if route.function == "get" && params == [("id".to_string(), "7".to_string())]
+        ));
+        assert!(matches!(
+            router.why(Some(Method::Delete), "/api/orders"),
+            Why::MethodNotAllowed { allowed } if allowed == [Method::Get, Method::Post]
+        ));
+        let Why::NotFound { instead, near } = router.why(Some(Method::Get), "/orders/7") else {
+            panic!()
+        };
+        assert_eq!(
+            instead,
+            Some((
+                "/api/orders/7".to_string(),
+                "every route is under `/api`".to_string()
+            ))
+        );
+        assert!(near.is_empty());
+        let Why::NotFound { instead, near } = router.why(Some(Method::Get), "/api/ordres/7") else {
+            panic!()
+        };
+        assert_eq!(instead, None);
+        assert_eq!(near[0].reason, "`ordres` is not `orders`");
+        let Why::NotFound { near, .. } = router.why(Some(Method::Get), "/api/orders/7/items")
+        else {
+            panic!()
+        };
+        let reasons: Vec<(&str, &str)> = near
+            .iter()
+            .map(|n| (n.path.as_str(), n.reason.as_str()))
+            .collect();
+        assert_eq!(
+            reasons,
+            [
+                ("/api/orders/{id}/lines", "`items` is not `lines`"),
+                ("/api/orders/{id}", "it ends one segment earlier"),
+                ("/api/orders", "it ends 2 segments earlier"),
+            ]
+        );
+        let Why::NotFound { instead, .. } = router.why(Some(Method::Get), "/api/orders/") else {
+            panic!()
+        };
+        assert_eq!(instead.unwrap().1, "routes have no trailing `/`");
     }
 
     #[test]

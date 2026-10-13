@@ -60,9 +60,11 @@ pub fn supervise(
         config.port,
         config.api_base()
     );
+    balise_core::journal::open(root);
     let say = |out: &mut dyn Write, event: Event| {
         let _ = writeln!(out, "{}", event.render_text(color));
         let _ = out.flush();
+        balise_core::journal::event(&event);
     };
 
     let mut watcher = Watcher::new(root);

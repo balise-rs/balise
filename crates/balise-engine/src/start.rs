@@ -11,7 +11,8 @@ use balise_core::registry;
 /// Starts the application. `build` is the environment the binary was built for.
 ///
 /// Without arguments, it loads the configuration and serves. `config check [--env NAME]`
-/// checks the configuration with the strictest rules and exits.
+/// checks the configuration with the strictest rules and exits. A dev build also answers
+/// `routes` and `why <METHOD> <path>`, for the CLI.
 pub fn start(files: Files, build: Environment) -> ! {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let variables: Vec<(String, String)> = std::env::vars().collect();
@@ -23,6 +24,12 @@ pub fn start(files: Files, build: Environment) -> ! {
     {
         [] => serve(files, build, &variables),
         ["config", "check", rest @ ..] => std::process::exit(check(files, build, &variables, rest)),
+        #[cfg(feature = "dev")]
+        ["routes"] => std::process::exit(crate::introspect::routes(files, build, &variables)),
+        #[cfg(feature = "dev")]
+        ["why", method, path] => std::process::exit(crate::introspect::why(
+            files, build, &variables, method, path,
+        )),
         _ => {
             let event = Event::coded(Level::Error, CFG0008, &[("command", &args.join(" "))]);
             println!("{}", event.render_text(color()));
@@ -32,6 +39,9 @@ pub fn start(files: Files, build: Environment) -> ! {
 }
 
 fn serve(files: Files, build: Environment, variables: &[(String, String)]) -> ! {
+    // In dev, every event from here on also goes to the journal of `balise logs`.
+    #[cfg(feature = "dev")]
+    balise_core::journal::open(std::path::Path::new(files.root));
     let environment = match load::environment(build, variables) {
         Ok(environment) => environment,
         Err(event) => fail(&[*event], build),

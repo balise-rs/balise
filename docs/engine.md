@@ -180,7 +180,7 @@ Delegated dependencies do the work below the facade, so an agent debugging a rou
 - No error, log, or crash report names a delegated crate. Network and connection errors carry `HTTP` or `EXT` codes with their own explanation.
 - Backtraces show the application's frames, from the one that panicked, and fold every run of other frames into one line (`… 14 frames outside the application`). Balise reads them from the standard library's text form; in production, frames have file and line only when the release profile keeps line tables.
 - `balise why <METHOD> <path>` explains a `404` or `405`: the routes that almost match and why they don't.
-- `balise trace <request_id>` (also an MCP tool) replays what happened to a request: routing decision, extracted parameters, queries, conversion of the error.
+- `balise trace <request_id>` (also an MCP tool) shows what happened to a request in dev: routing decision, extracted parameters and limits, then its events; queries come with the ORM. It reads the dev journal ([environments.md](environments.md#dev-with-docker)).
 - The generated `AGENTS.md` tells agents to debug through these tools and never inside dependencies.
 This cannot stop an agent from opening `Cargo.lock` or a dependency's source, but nothing points it there.
  
@@ -213,6 +213,7 @@ All defaults can be changed in `balise.toml`.
 Compiled only in dev builds. A binary built with `dev` refuses to start with `BALISE_ENV=prod`.
  
 - MCP server, reached through `balise mcp` on the host ([agent-experience.md](agent-experience.md)).
+- The dev journal, written for `balise logs` and `balise trace`, and the binary's `routes` and `why <METHOD> <path>` commands, for `balise routes` and `balise why`.
 - Detailed instrumentation: N+1 detection, query plans, blocked event loop.
 - Detailed error pages.
 - Proxy to the Vite dev server ([web.md](web.md)).

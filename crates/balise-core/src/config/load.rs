@@ -317,7 +317,7 @@ fn is_secret(settings: &[Setting], key: &str) -> bool {
 }
 
 /// The variable of a setting: `log.level` gives `BALISE_LOG_LEVEL`.
-fn variable_name(key: &str) -> String {
+pub fn variable_name(key: &str) -> String {
     format!("BALISE_{}", key.replace('.', "_").to_ascii_uppercase())
 }
 
@@ -673,6 +673,7 @@ api = { prefix = "/backend", version = 2 }
         expected: "a URL",
         also: &["DATABASE_URL"],
         apply: |_, raw| raw.text().is_some_and(|url| url.contains("://")),
+        value: |_| None,
     };
 
     fn load_secret(text: &'static str, variables: &[(&str, &str)]) -> Result<Loaded, Vec<Event>> {

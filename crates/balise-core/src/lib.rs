@@ -9,6 +9,7 @@ pub mod extract;
 pub mod file;
 pub mod handler;
 pub mod input;
+pub mod journal;
 pub mod json;
 pub mod limits;
 pub mod log;

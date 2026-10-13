@@ -12,7 +12,8 @@ name = "balise-cli"
 path = "src/main.rs"
 
 [dependencies]
-balise-core.workspace = true
+# `dev`: the supervisor writes its events in the dev journal, with the app's.
+balise-core = { workspace = true, features = ["dev"] }
 
 # Sending SIGTERM to the app and catching Ctrl-C in `balise dev`.
 [target.'cfg(unix)'.dependencies]

@@ -5,7 +5,7 @@
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::time::Duration;
 
 use balise_core::error_codes::{DEV0004, DEV0005, DEV0006, DEV0007};
@@ -120,42 +120,57 @@ impl Compose {
     /// Runs `balise check` in the dev container, the running one or a temporary one, and
     /// reads what it found.
     pub fn check(&self, running: bool, ci: bool) -> Result<Checked, Failure> {
-        let script = r#"exec balise-cli check --json "$@""#;
-        let (command, how): (&str, &[&str]) = match running {
-            true => ("exec", &["exec", "-T", SERVICE]),
-            false => (
-                "run",
-                &["run", "--rm", "--build", "--no-deps", "-T", SERVICE],
-            ),
-        };
-        let mut args: Vec<&str> = how.to_vec();
-        args.extend(["sh", "-c", script, "sh"]);
+        let mut args = vec!["--json"];
         if ci {
             args.push("--ci");
         }
+        let (command, output) = self.run_in(running, r#"exec balise-cli check "$@""#, &args)?;
+        let value = last_json(&output).ok_or_else(|| failed(command, &cause(&output)))?;
+        if let Some(failure) = Failure::from_json(&value) {
+            return Err(failure);
+        }
+        Checked::from_value(&value).ok_or_else(|| failed(command, "unexpected output"))
+    }
+
+    /// Runs a shell `script` with `args` in the dev container: `docker compose exec` in the
+    /// running one, `docker compose run` in a temporary one. Its standard error is shown.
+    pub fn run_in(
+        &self,
+        running: bool,
+        script: &str,
+        args: &[&str],
+    ) -> Result<(&'static str, Output), Failure> {
+        let (command, how): (&str, &[&str]) = match running {
+            true => ("exec", &["exec", "-T", SERVICE]),
+            false => ("run", &["run", "--rm", "--no-deps", "-T", SERVICE]),
+        };
+        // A temporary container starts from an image up to date; building it quietly keeps
+        // its progress out of the answer.
+        if !running {
+            let built = Command::new("docker")
+                .args(["compose", "build", "--quiet", SERVICE])
+                .current_dir(&self.root)
+                .envs(self.variables.iter().map(|(name, value)| (name, value)))
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .status()
+                .map_err(|error| failed("build", &error.to_string()))?;
+            if !built.success() {
+                return Err(failed("build", &super::app::describe(built)));
+            }
+        }
         let output = Command::new("docker")
             .arg("compose")
-            .args(&args)
+            .args(how)
+            .args(["sh", "-c", script, "sh"])
+            .args(args)
             .current_dir(&self.root)
             .envs(self.variables.iter().map(|(name, value)| (name, value)))
             .stdin(Stdio::null())
             .stderr(Stdio::inherit())
             .output()
             .map_err(|error| failed(command, &error.to_string()))?;
-        // Building the image, the first time, writes its progress before.
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let last = stdout.trim().lines().last().unwrap_or_default();
-        let value = json::parse(last.as_bytes()).map_err(|_| {
-            let cause = match last {
-                "" => super::app::describe(output.status),
-                text => text.to_string(),
-            };
-            failed(command, &cause)
-        })?;
-        if let Some(failure) = Failure::from_json(&value) {
-            return Err(failure);
-        }
-        Checked::from_value(&value).ok_or_else(|| failed(command, "unexpected output"))
+        Ok((command, output))
     }
 
     /// Stops and removes the container. The volumes stay: the next start does not compile
@@ -213,6 +228,34 @@ fn forward(child: &Child, signal: i32) {
 #[cfg(not(unix))]
 fn forward(_: &Child, _: i32) {
     // Ctrl-C reaches every process of the console on Windows: compose already has it.
+}
+
+/// What a command run without Rust on the machine says about it.
+pub fn note(running: bool) -> &'static str {
+    match running {
+        true => {
+            "No Rust on this machine: ran in the running dev container, which is slower. Installing Rust (https://rustup.rs) makes it faster."
+        }
+        false => {
+            "No Rust on this machine: ran in a temporary dev container, which is slower. Installing Rust (https://rustup.rs), or keeping `balise dev` running, makes it faster."
+        }
+    }
+}
+
+/// The last line of standard output as JSON.
+pub fn last_json(output: &Output) -> Option<json::Value> {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let last = stdout.trim().lines().last()?;
+    json::parse(last.as_bytes()).ok()
+}
+
+/// Why a run gave nothing usable: its last line, or how it ended.
+pub fn cause(output: &Output) -> String {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    match stdout.trim().lines().last() {
+        Some(last) => last.to_string(),
+        None => super::app::describe(output.status),
+    }
 }
 
 fn failed(command: &str, cause: &str) -> Failure {

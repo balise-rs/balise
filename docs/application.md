@@ -355,7 +355,8 @@ Investigate through Balise, never in the framework's dependencies. Everything be
 | --- | --- |
 | A route returns `404` or `405` | `balise why GET /orders/5`: lists the routes that almost match and why they don't |
 | Unsure which routes exist | `balise routes`, or the `project_map` MCP tool |
-| A request misbehaves | `balise trace <request_id>`: routing decision, extracted parameters, queries, error |
+| A request misbehaves | `balise trace <request_id>`: routing decision, extracted parameters, limits, its events |
+| What happened earlier | `balise logs`, filtered with `--code`, `--level`, `--request` or `--since` |
 | A network or connection error | its `HTTP` or `EXT` code, then `balise explain <CODE>` |
 | A panic | its `RUN0006` event: the line that panicked and your frames, framework frames folded |
 

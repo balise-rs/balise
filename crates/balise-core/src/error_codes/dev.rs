@@ -80,4 +80,35 @@ container. Building the image the first time downloads Rust and compiles the CLI
 the network.
 "#,
     }
+    DEV0008 {
+        title: "Request not in the journal",
+        message: "No request `{request_id}` in the dev journal",
+        fix: "Copy the id from a response's `request_id` or from `balise logs`; only the requests of `balise dev` are kept, the last few megabytes of them.",
+        explanation: r#"
+`balise trace` reads the dev journal, `.balise/dev/journal.jsonl`, where an app built by
+`balise dev` writes every event and what routing decided for each request. The journal
+keeps the last few megabytes: older requests are gone. Requests to an app started another
+way, or in production, are never in it.
+"#,
+    }
+    DEV0009 {
+        title: "The app does not build",
+        message: "`balise {command}` asks the app's dev build, and the app does not build",
+        fix: "Run `balise check` to see why, fix it, then run `balise {command}` again.",
+        explanation: r#"
+Commands that read the project (`routes`, `why`, `config check`) are answered by the app
+itself, built with the `dev` feature, so that their answer is always the one of the code
+as it is. When the code does not compile, there is nothing to ask.
+"#,
+    }
+    DEV0010 {
+        title: "The app did not answer",
+        message: "The app's dev build did not answer `{command}`: {cause}",
+        fix: "Run `balise check`. If the project builds, Balise has a bug: the app and the CLI of the same version always agree.",
+        explanation: r#"
+`balise routes`, `balise why` and `balise config check` build the app with the `dev`
+feature, run it with a command, and read its answer. The app ran, but its answer could not
+be read.
+"#,
+    }
 }

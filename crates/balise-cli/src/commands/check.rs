@@ -37,14 +37,7 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
     } else {
         let compose = Compose::new(&root, context.machine, false)?;
         let running = compose.running(context.machine)?;
-        let note = match running {
-            true => {
-                "No Rust on this machine: checked in the running dev container, which is slower. Installing Rust (https://rustup.rs) makes checks faster."
-            }
-            false => {
-                "No Rust on this machine: checked in a temporary dev container, which is slower. Installing Rust (https://rustup.rs), or keeping `balise dev` running, makes checks faster."
-            }
-        };
+        let note = crate::dev::docker::note(running);
         if context.interactive {
             let _ = writeln!(context.output, "{}", p.dim(note));
         }

@@ -3,6 +3,8 @@
 //! hyper and Tokio are used here and nowhere else. Nothing from them crosses this crate's
 //! boundary into the facade: errors leave as Balise events with their codes.
 
+#[cfg(feature = "dev")]
+mod introspect;
 mod shutdown;
 mod start;
 mod tasks;
@@ -419,6 +421,19 @@ async fn handle(
             path,
         } => {
             let limits = server.limits.get(route);
+            #[cfg(feature = "dev")]
+            balise_core::journal::route(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_or(0, |d| d.as_millis() as u64),
+                &request_id,
+                parts.method.as_str(),
+                parts.uri.path(),
+                parts.uri.query().unwrap_or_default(),
+                route,
+                &params,
+                &limits,
+            );
             let body = RequestBody::new(HyperBody(body), limits.body_size);
             let progress = body.progress();
             let headers = parts

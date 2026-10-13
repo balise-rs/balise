@@ -84,9 +84,12 @@ Balise cannot know which one is meant to win.
         message: "Unknown command `{command}`",
         fix: "Run the app without arguments to serve, or with `config check [--env dev|test|prod]` to check its configuration.",
         explanation: r#"
-The app's binary serves without arguments. Its only command is `config check`, which reads
-the configuration of an environment with the strictest rules and exits: `0` when it is
-valid, `1` otherwise. Run it in CI with `--env prod` before deploying.
+The app's binary serves without arguments. Its command is `config check`, which reads the
+configuration of an environment with the strictest rules and exits: `0` when it is valid,
+`1` otherwise. Run it in CI with `--env prod` before deploying.
+
+A dev build also answers `routes` and `why <METHOD> <path>`, for `balise routes` and
+`balise why`.
 "#,
     }
     CFG0009 {

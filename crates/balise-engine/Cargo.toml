@@ -9,7 +9,7 @@ publish = true
 
 [features]
 # Dev tooling: the watch on tasks that hold the event loop.
-dev = []
+dev = ["balise-core/dev"]
 
 [dependencies]
 balise-core = { workspace = true, features = ["runtime"] }

@@ -7,6 +7,7 @@ use balise_core::error_codes::ErrorCode;
 use balise_core::json::{Number, Value};
 
 use super::{enrich, source};
+pub use crate::value::{array, get, number, text};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
@@ -318,33 +319,4 @@ fn helps(message: &Value) -> Option<String> {
     let mut chars = fix.chars();
     let first = chars.next()?.to_uppercase().collect::<String>();
     Some(format!("{first}{}.", chars.as_str().trim_end_matches('.')))
-}
-
-pub fn get<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
-    match value {
-        Value::Object(fields) => fields.iter().find(|(k, _)| k == key).map(|(_, v)| v),
-        _ => None,
-    }
-}
-
-pub fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
-    match get(value, key)? {
-        Value::String(text) => Some(text),
-        _ => None,
-    }
-}
-
-pub fn number(value: &Value, key: &str) -> usize {
-    match get(value, key) {
-        Some(Value::Number(Number::Integer(n))) => (*n).max(0) as usize,
-        Some(Value::Number(Number::Unsigned(n))) => *n as usize,
-        _ => 0,
-    }
-}
-
-pub fn array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
-    match get(value, key) {
-        Some(Value::Array(items)) => items,
-        _ => &[],
-    }
 }

@@ -11,6 +11,9 @@ publish = true
 # Reading uploads and storing files. The engine enables it; the macros, which only need the
 # error codes and declarations, do not, so that Tokio is not compiled for them too.
 runtime = ["dep:tokio"]
+# The dev journal's writer (`journal`), for `balise logs` and `balise trace`. Never in a
+# production build.
+dev = []
 
 [dependencies]
 linkme.workspace = true

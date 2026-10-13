@@ -23,7 +23,7 @@ Almost every command depends on the project's Balise version: `explain` reads it
 - **The launcher**, the `balise` command itself: small and stable. Inside a project, it reads the Balise version in `Cargo.lock` and runs the CLI of that version; outside a project (`balise new`), it uses the latest version, or `--version`. Each version is downloaded once into `~/.balise/versions/<version>/`, checksum verified. Upgrading Balise in a project changes the CLI it gets, and other projects keep theirs: no CLI has to support a range of versions.
 - **The versioned CLI**, published with each release of Balise. It holds every command and the MCP server. The project's dev image contains the same version, which `balise dev --inside` uses.
 
-What reads the project itself (routes, models, configuration) is answered by the project's dev build, as subcommands of the app's binary built with `dev`, like `./app config check` already: `./app routes`, `./app why GET /orders/5`. The CLI calls them, so one implementation serves every version. `trace` and `logs` ask the running dev server, which keeps recent requests in memory.
+What reads the project itself (routes, models, configuration) is answered by the project's dev build, as subcommands of the app's binary built with `dev`, like `./app config check` already: `./app routes`, `./app why GET /orders/5`. The CLI calls them, so one implementation serves every version. `logs` and `trace` read the dev journal, where the app built by `balise dev` and the supervisor write every event and what routing decided for each request ([environments.md](environments.md#dev-with-docker)): they answer whether the app runs or not, across its restarts.
 
 **One implementation for the CLI and MCP.** Each command is a function that takes typed arguments and returns structured data; it prints nothing itself. Commands are declared in one registry, from which both the CLI's arguments and the MCP tools' schemas are derived. The terminal shows compact text, `--json` the data; an MCP tool answers with the same text as `content` and the same data as `structuredContent`. Every MCP tool is a command (`search_api` is `balise search`); commands that need a human (`policy`, `approve` in `human` mode) are not MCP tools.
 
@@ -35,7 +35,7 @@ Errors of the CLI itself have codes in the `CLI` area, with their fix and explan
 | `balise dev` | start the dev environment, with reload; `--detach` runs it in the background, `balise dev status` and `balise dev stop` control it |
 | `balise check` | compile and enrich errors; `--ci` checks everything, the release configuration included |
 | `balise test` | start the test database, then run `cargo test` |
-| `balise logs` | recent events of the dev server, filtered by code, level and period |
+| `balise logs` | recent events of the app in dev and of `balise dev`, filtered by level, code, request and period |
 | `balise approve` | review and decide pending sensitive decisions ([Sensitive decisions](#sensitive-decisions)) |
 | `balise approvals` | list past decisions, filtered by author and date |
 | `balise policy preset <preset>` | choose who decides sensitive decisions, for all types at once; needs a terminal |
@@ -46,7 +46,7 @@ Errors of the CLI itself have codes in the `CLI` area, with their fix and explan
 | `balise introspect` | print the project map as JSON |
 | `balise routes` | list routes and handlers |
 | `balise why <METHOD> <path>` | explain a `404` or `405` |
-| `balise trace <request_id>` | replay what happened to a request |
+| `balise trace <request_id>` | what happened to a request in dev: its route, parameters, limits and events |
 | `balise generate <kind> <name>` | generate a resource, model or route |
 | `balise migrate …` | regenerate the draft, `freeze` it, apply migrations; never interactive ([data.md](data.md#draft-migrations)) |
 | `balise config check --env <env>` | validate configuration without starting the app |
@@ -150,7 +150,8 @@ Each tool is served by what it really needs, so the agent keeps its tools when t
 | `search_api`, `explain` | `balise mcp` itself, with the index and the registry of the project's Balise version | yes |
 | `check` | the CLI | yes |
 | `project_map` | the map of the last successful build, cached in `.balise/` | yes, with a `stale_since` field and a line saying the code does not compile |
-| `logs`, `trace`, `mails` | the dev server | no: the answer gives the command to start it (`balise dev --detach`) |
+| `logs`, `trace` | the dev journal, a file in the project | yes, with what the app logged while it ran |
+| `mails` | the dev server | no: the answer gives the command to start it (`balise dev --detach`) |
 
 The CLI reads the project's Balise version in `Cargo.lock` and downloads the matching index once, cached in `~/.balise/`. The first use of a version needs the network, and the CLI says so plainly when there is none.
 

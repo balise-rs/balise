@@ -77,6 +77,8 @@ pub fn install(logger: Logger) -> bool {
 
 /// Writes an event. Before a logger is installed (a failure while starting), text on stdout.
 pub(crate) fn write(event: Event) {
+    #[cfg(feature = "dev")]
+    crate::journal::event(&event);
     match LOGGER.get() {
         Some(logger) => logger.write(&event),
         None => Logger::stdout(Format::Text, Level::Info).write(&event),

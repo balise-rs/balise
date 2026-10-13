@@ -84,10 +84,7 @@ Done !
 Done !
 
 ### 4.4 `routes`, `why`, `trace`, `explain`
-Implement the debugging commands, answered by the project's dev build as subcommands of the app's binary (`./app routes`, `./app why …`) so versions always match. Each one is also an MCP tool later, from the same command registry.
-- More: [application.md](application.md#debugging), [engine.md](engine.md#diagnostics)
-- Also: `balise logs`, `balise test`, `balise approve`, `balise approvals`, `balise policy set`, `balise search`
-- `balise config check` runs the app's `config check` command; `balise explain config` lists every setting with its default and variable
+Done !
 
 ### 4.5 Agent hooks and generated `AGENTS.md`
 Generate hooks for Claude Code and rules for Cursor, and an `AGENTS.md` describing conventions, commands and the working loop. Keep it short enough to stay in context.
@@ -114,6 +111,7 @@ Generate the API reference and one page per error code at each release. Nothing 
 Extend the list of traps (`CMP0021`, rewritten by `balise check` since 4.3) with the names agents invent in evaluations, the ORM's included. Feed the `search_api` index with them.
 - More: [errors-and-logs.md](errors-and-logs.md#hallucination-traps)
 - Traps are rewritten by `balise check` from rustc's JSON, plus `on_unimplemented` for trait-bound cases ([errors-and-logs.md](errors-and-logs.md#hallucination-traps))
+- Also: `balise search`, the CLI side of `search_api`, on the same index
 
 ### 5.5 First agent evaluation
 Run a set of tasks with agents on fresh projects and record the metrics. This is the baseline every later change is compared to.
@@ -177,6 +175,7 @@ Derive factories from models and inputs, with reproducible seeds, the `dev` data
 - More: [data.md](data.md#test-data)
 - To decide: fresh database or rollback per test ([alternatives.md](alternatives.md))
 - To decide: the verb to set factory fields, the same as `create` ([data.md](data.md#open-questions))
+- Also: `balise test`, which starts the test database, then runs `cargo test` ([agent-experience.md](agent-experience.md#the-cli))
 
 ## 7. Web
 
@@ -240,6 +239,7 @@ Report static candidates, promoted to warnings by `expected_rows` or by measurem
 Add `queries` and `response_size` to `budgets.toml` (which already holds `body_size` and `timeout`), budgets failing tests, and approval for increases.
 - More: [agent-experience.md](agent-experience.md#budgets)
 - Every test request checks its route's budget; no per-test assertion; raising a budget is a sensitive decision
+- Also: `balise approve` and `balise approvals`, with this first type of sensitive decision; `balise explain budgets` ([agent-experience.md](agent-experience.md#sensitive-decisions))
 
 ### 9.4 `balise audit` and audit at scale
 Replay scenarios, rank findings, fill tables to their declared sizes with uneven distributions, and measure before and after fixes.
