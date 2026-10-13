@@ -20,6 +20,10 @@ pub const COMMAND: Command = Command {
             "run in the background; `balise dev stop` stops it",
         ),
         Opt::flag(
+            "--volumes",
+            "with `stop`: also remove the volumes of `target/` and the registry; the next start compiles everything",
+        ),
+        Opt::flag(
             "--native",
             "build and run on this machine, with its Rust, without Docker",
         ),
@@ -60,6 +64,13 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
             ));
         }
     }
+    if parsed.has("--volumes") && action != Some("stop") {
+        return Err(crate::missing(
+            "dev --volumes",
+            "`stop`",
+            "balise dev stop --volumes",
+        ));
+    }
     let root = project::require(&context.cwd, "dev")?;
     let color = style::wanted(std::io::stdout().is_terminal());
 
@@ -91,8 +102,12 @@ fn run(parsed: &Parsed, context: &mut Context) -> Result<Report, Failure> {
             })
         }
         Some(_) => {
-            compose.down()?;
-            Ok(crate::text("The app is stopped.".into()))
+            let volumes = parsed.has("--volumes");
+            compose.down(volumes)?;
+            Ok(crate::text(match volumes {
+                true => "The app is stopped, and its volumes removed: the next `balise dev` compiles everything.".into(),
+                false => "The app is stopped.".into(),
+            }))
         }
         None if parsed.has("--detach") => {
             compose.up(context.machine, true)?;

@@ -51,6 +51,7 @@ impl Compose {
             ("BALISE_DEV_STOP_GRACE", format!("{}ms", grace.as_millis())),
             ("BALISE_DEV_USER", user()),
         ];
+        write_env(root, &variables);
         if color {
             variables.push(("CLICOLOR_FORCE", "1".to_string()));
         }
@@ -175,8 +176,11 @@ impl Compose {
 
     /// Stops and removes the container. The volumes stay: the next start does not compile
     /// everything again.
-    pub fn down(&self) -> Result<(), Failure> {
-        self.run(&["down"])
+    pub fn down(&self, volumes: bool) -> Result<(), Failure> {
+        match volumes {
+            true => self.run(&["down", "--volumes"]),
+            false => self.run(&["down"]),
+        }
     }
 
     /// Runs `docker compose`, its output shown. Ctrl-C and `SIGTERM` reach it through this
@@ -205,8 +209,25 @@ impl Compose {
                 break status;
             }
             if let Some((received, signal)) = super::signal::received_since(seen) {
+                // One signal at a time, so that compose reacts to each: the first stops the
+                // container cleanly, the second forces it; past that, compose does not
+                // answer, and is killed so that the terminal is given back.
+                for count in seen + 1..=received {
+                    match count {
+                        1 => eprintln!("Stopping the app… Ctrl-C again to force."),
+                        2 => eprintln!("Forcing… Ctrl-C again to leave without waiting."),
+                        _ => {
+                            let _ = child.kill();
+                            let _ = child.wait();
+                            eprintln!(
+                                "Left without waiting for Docker: `balise dev status` says what runs, `balise dev stop` stops it."
+                            );
+                            return Ok(());
+                        }
+                    }
+                    forward(&child, signal);
+                }
                 seen = received;
-                forward(&child, signal);
             }
             std::thread::sleep(Duration::from_millis(50));
         };
@@ -228,6 +249,49 @@ fn forward(child: &Child, signal: i32) {
 #[cfg(not(unix))]
 fn forward(_: &Child, _: i32) {
     // Ctrl-C reaches every process of the console on Windows: compose already has it.
+}
+
+/// The block of `.env` that `balise dev` writes, between these lines.
+const ENV_START: &str =
+    "# Written by `balise dev` from balise.toml, for `docker compose`: change balise.toml instead.";
+const ENV_END: &str = "# End of what `balise dev` writes.";
+
+/// Writes the variables `compose.yaml` reads in the project's `.env`, which compose reads on
+/// its own: `docker compose` then works by hand too, with the values of the last `balise`
+/// command. The rest of the file is the user's, and kept as it is. A failure only costs
+/// `docker compose` by hand, so it is not reported.
+fn write_env(root: &Path, variables: &[(&str, String)]) {
+    let path = root.join(".env");
+    let current = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut block = format!("{ENV_START}\n");
+    for (name, value) in variables {
+        block.push_str(&format!("{name}={value}\n"));
+    }
+    block.push_str(ENV_END);
+    let updated = match (current.find(ENV_START), current.find(ENV_END)) {
+        (Some(start), Some(end)) if end > start => {
+            format!(
+                "{}{block}{}",
+                &current[..start],
+                &current[end + ENV_END.len()..]
+            )
+        }
+        _ => {
+            let mut text = current.clone();
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            if !text.is_empty() {
+                text.push('\n');
+            }
+            text.push_str(&block);
+            text.push('\n');
+            text
+        }
+    };
+    if updated != current {
+        let _ = std::fs::write(&path, updated);
+    }
 }
 
 /// What a command run without Rust on the machine says about it.
@@ -275,4 +339,24 @@ fn user() -> String {
 fn user() -> String {
     // Docker Desktop maps the files of the project to the user on its own.
     "root".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_env_block_is_written_once_and_the_rest_kept() {
+        let root = std::env::temp_dir().join("balise-env-block");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(".env"), "SECRET=1").unwrap();
+        write_env(&root, &[("BALISE_DEV_PORT", "3000".to_string())]);
+        write_env(&root, &[("BALISE_DEV_PORT", "3001".to_string())]);
+        let text = std::fs::read_to_string(root.join(".env")).unwrap();
+        assert_eq!(
+            text,
+            format!("SECRET=1\n\n{ENV_START}\nBALISE_DEV_PORT=3001\n{ENV_END}\n")
+        );
+    }
 }

@@ -194,7 +194,7 @@ On `SIGTERM`, or Ctrl-C:
 4. WebSocket connections receive a close frame.
 5. The pool closes and the process exits with `0`.
 
-The orchestrator must wait longer than `shutdown.timeout` before it kills the process. `balise dev` gives the generated `compose.yaml` a `stop_grace_period` of `shutdown.timeout` plus 5 s, read from `balise.toml` at each start, since Docker's default (10 s) leaves no margin; Kubernetes waits 30 s by default.
+The orchestrator must wait longer than `shutdown.timeout` before it kills the process. `balise dev` gives the generated `compose.yaml` a `stop_grace_period` of `shutdown.timeout` plus 5 s, read from `balise.toml` at each start and written in `.env` for `docker compose` by hand, since Docker's default (10 s) leaves no margin; Kubernetes waits 30 s by default.
 ## Defaults
  
 | Setting | Default |

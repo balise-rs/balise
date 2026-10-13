@@ -316,6 +316,14 @@ fn is_secret(settings: &[Setting], key: &str) -> bool {
         .any(|s| s.key == key && s.kind == Kind::Secret)
 }
 
+/// Variables of Balise's tools, not settings: the launcher's (`BALISE_CLI`, `BALISE_HOME`),
+/// and those `balise dev` gives compose (`BALISE_VERSION`, `BALISE_DEV_…`), which a tool
+/// loading `.env` may put in the app's environment.
+pub fn is_tooling(name: &str) -> bool {
+    matches!(name, "BALISE_CLI" | "BALISE_HOME" | "BALISE_VERSION")
+        || name.starts_with("BALISE_DEV_")
+}
+
 /// The variable of a setting: `log.level` gives `BALISE_LOG_LEVEL`.
 pub fn variable_name(key: &str) -> String {
     format!("BALISE_{}", key.replace('.', "_").to_ascii_uppercase())
@@ -358,7 +366,7 @@ fn read_variables(
         }
     }
     for (name, _) in variables {
-        if name.starts_with("BALISE_") && !known.contains(name) {
+        if name.starts_with("BALISE_") && !known.contains(name) && !is_tooling(name) {
             let names: Vec<&str> = known.iter().map(String::as_str).collect();
             let source = Source::Variable(name.clone()).to_string();
             let event =
@@ -637,7 +645,13 @@ api = { prefix = "/backend", version = 2 }
         let errors = load_in(
             Environment::Dev,
             "",
-            &[("BALISE_PORT", "abc"), ("BALISE_LOG_LEVL", "debug")],
+            &[
+                ("BALISE_PORT", "abc"),
+                ("BALISE_LOG_LEVL", "debug"),
+                // The tools' own: not settings, never reported.
+                ("BALISE_CLI", "/bin/balise-cli"),
+                ("BALISE_DEV_PORT", "3000"),
+            ],
         )
         .unwrap_err();
         assert_eq!(

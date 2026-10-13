@@ -398,6 +398,14 @@ mod tests {
     }
 
     #[test]
+    fn no_setting_takes_a_tooling_variable() {
+        for setting in SETTINGS {
+            let variable = load::variable_name(setting.key);
+            assert!(!load::is_tooling(&variable), "{}", setting.key);
+        }
+    }
+
+    #[test]
     fn defaults_follow_the_environment() {
         let dev = Config::defaults(Environment::Dev);
         let prod = Config::defaults(Environment::Prod);

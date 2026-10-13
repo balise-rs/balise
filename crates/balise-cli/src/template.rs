@@ -257,4 +257,30 @@ mod tests {
         assert!(text.contains("\"command\": \"balise check --hook\""));
         assert!(check.options.iter().any(|option| option.name == "--hook"));
     }
+
+    /// A plain YAML value cannot hold `: `: the messages of `compose.yaml`'s variables, in
+    /// both forms, must not.
+    #[test]
+    fn compose_values_stay_plain_yaml() {
+        for checkout in [None, Some("/src/balise")] {
+            let choices = Choices {
+                name: "shop",
+                dependency: "\"=0.1.0\"",
+                checkout,
+                example: false,
+            };
+            let (_, content) = render(&choices)
+                .into_iter()
+                .find(|(path, _)| path == "compose.yaml")
+                .unwrap();
+            let text = String::from_utf8(content).unwrap();
+            for line in text
+                .lines()
+                .filter(|line| !line.trim_start().starts_with('#'))
+            {
+                let value = line.split_once(": ").map_or(line, |(_, value)| value);
+                assert!(!value.contains(": "), "not plain YAML: {line}");
+            }
+        }
+    }
 }

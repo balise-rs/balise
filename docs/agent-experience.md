@@ -32,7 +32,7 @@ Errors of the CLI itself have codes in the `CLI` area, with their fix and explan
 | Command | Purpose |
 | --- | --- |
 | `balise new <name>` | create a project ([below](#balise-new)) |
-| `balise dev` | start the dev environment, with reload; `--detach` runs it in the background, `balise dev status` and `balise dev stop` control it |
+| `balise dev` | start the dev environment, with reload; `--detach` runs it in the background, `balise dev status` and `balise dev stop` control it; `balise dev stop --volumes` starts over from scratch |
 | `balise check` | compile and enrich errors; `--ci` checks everything, the release configuration included |
 | `balise test` | start the test database, then run `cargo test` |
 | `balise logs` | recent events of the app in dev and of `balise dev`, filtered by level, code, request and period |
